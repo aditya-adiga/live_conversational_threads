@@ -1,0 +1,121 @@
+[
+    {
+        "node_name": "Productivity App Discussion",
+        "type": "conversational_thread",
+        "predecessor": "",
+        "successor": "Report Review Discussion",
+        "related_nodes": [
+            "Productivity App Revisited"
+        ],
+        "relationship_strength": {
+            "Productivity App Revisited": "strong"
+        },
+        "summary": "Maya and Liam discuss a new productivity app, focusing on its task automation features and potential benefits."
+    },
+    {
+        "node_name": "Report Review Discussion",
+        "type": "conversational_thread",
+        "predecessor": "Productivity App Discussion",
+        "successor": "AI Chatbot Discussion",
+        "related_nodes": [
+            "Report Review Revisited"
+        ],
+        "relationship_strength": {
+            "Report Review Revisited": "strong"
+        },
+        "summary": "Liam mentions needing to polish his report, and Maya offers to review it."
+    },
+    {
+        "node_name": "AI Chatbot Discussion",
+        "type": "conversational_thread",
+        "predecessor": "Report Review Discussion",
+        "successor": "AI Presentation Tools",
+        "related_nodes": [
+            "Remote Work Security"
+        ],
+        "relationship_strength": {
+            "Remote Work Security": "moderate"
+        },
+        "summary": "Discussion about AI-powered chatbots and their limitations in customer service."
+    },
+    {
+        "node_name": "AI Presentation Tools",
+        "type": "conversational_thread",
+        "predecessor": "AI Chatbot Discussion",
+        "successor": "Remote Work Security",
+        "related_nodes": [
+            "AI Chatbot Discussion"
+        ],
+        "relationship_strength": {
+            "AI Chatbot Discussion": "moderate"
+        },
+        "summary": "Maya brings up AI-powered presentation tools, leading to discussion about Liam's upcoming presentation."
+    },
+    {
+        "node_name": "Remote Work Security",
+        "type": "conversational_thread",
+        "predecessor": "AI Presentation Tools",
+        "successor": "Productivity App Revisited",
+        "related_nodes": [
+            "AI Presentation Tools"
+        ],
+        "relationship_strength": {
+            "AI Presentation Tools": "moderate"
+        },
+        "summary": "Discussion about data security in remote work and employee monitoring concerns."
+    },
+    {
+        "node_name": "Productivity App Revisited",
+        "type": "conversational_thread",
+        "predecessor": "Remote Work Security",
+        "successor": "Report Review Revisited",
+        "related_nodes": [
+            "Productivity App Discussion"
+        ],
+        "relationship_strength": {
+            "Productivity App Discussion": "strong"
+        },
+        "summary": "Circle back to the productivity app discussion, specifically about using it for report review scheduling."
+    },
+    {
+        "node_name": "Report Review Revisited",
+        "type": "conversational_thread",
+        "predecessor": "Productivity App Revisited",
+        "successor": "",
+        "related_nodes": [
+            "Report Review Discussion"
+        ],
+        "relationship_strength": {
+            "Report Review Discussion": "strong"
+        },
+        "summary": "Return to the report review topic to actually begin the review process."
+    },
+    {
+        "node_name": "Report Review",
+        "type": "bookmark",
+        "predecessor": "",
+        "successor": "",
+        "related_nodes": [
+            "Report Review Discussion",
+            "Report Review Revisited"
+        ],
+        "relationship_strength": {
+            "Report Review Discussion": "bookmark",
+            "Report Review Revisited": "bookmark"
+        },
+        "summary": "Bookmark created for report review discussion and accessed later when returning to the topic."
+    },
+    {
+        "node_name": "Remote Work Security Notes",
+        "type": "bookmark",
+        "predecessor": "",
+        "successor": "",
+        "related_nodes": [
+            "Remote Work Security"
+        ],
+        "relationship_strength": {
+            "Remote Work Security": "bookmark"
+        },
+        "summary": "Bookmark created for remote work security discussion and accessed when discussing presentation content."
+    }
+]

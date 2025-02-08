@@ -66,9 +66,12 @@ def draw_graph(output_file):
     pos = nx.spring_layout(G, k=1.0)
     pos_labels = offset_labels(pos, x_shift=0.1, y_shift=0.1) 
 
-    plt.figure(figsize=(12, 12))
+    plt.figure(figsize=(15, 15))
     nx.draw(G, pos, node_color=node_colors, edge_color=edge_colors, with_labels=False, node_size=500, arrows=True)
     nx.draw_networkx_labels(G, pos_labels, font_color='black', font_weight='bold')
+
+    plt.xlim(-1.3, 1.3)
+    plt.ylim(-1.3, 1.3)
 
     plt.savefig("graph.svg", format="svg")
 

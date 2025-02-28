@@ -138,6 +138,12 @@ if __name__ == "__main__":
 
             st.subheader("Generated Graph Visualization:")
             st.image(buf, caption="Live Threads Graph", use_container_width=True)
+            
+            if json_data:
+                st.subheader("Generated JSON Output:")
+                st.json(json_data)  # Display JSON output
+            else:
+                st.error("Failed to generate JSON. Please try again.")
         else:
             st.warning("Please enter a transcript.")
             

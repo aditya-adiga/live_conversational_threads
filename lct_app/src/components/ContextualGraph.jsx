@@ -5,6 +5,8 @@ import "reactflow/dist/style.css";
 
 export default function ContextualGraph({ graphData, selectedNode, setSelectedNode }) {
   const [isFullScreen, setIsFullScreen] = useState(false);
+  const [showContext, setShowContext] = useState(false);
+
 
   const latestChunk = graphData?.[graphData.length - 1] || {}; 
   const jsonData = latestChunk.existing_json || []; 
@@ -93,6 +95,7 @@ export default function ContextualGraph({ graphData, selectedNode, setSelectedNo
         {/* Show Details Button */}
         <button 
             className="px-4 py-2 bg-green-100 text-black rounded-lg shadow-md hover:bg-green-200 active:scale-95 transition" 
+            onClick={() => setShowContext(!showContext)}
         >
             whats the context? 🕵️‍♂️
         </button>
@@ -105,6 +108,26 @@ export default function ContextualGraph({ graphData, selectedNode, setSelectedNo
           {isFullScreen ? "❌" : "🔎"}
         </button>
       </div>
+
+      {/* Context Card */}
+      {showContext && selectedNode && (
+      <div className="p-4 border rounded-lg bg-green-100 shadow-md mb-2">
+        <h3 className="font-semibold text-black">Context for: {selectedNode}</h3>
+
+        <p className="text-sm text-black">
+          <strong>Summary:</strong> {jsonData.find(node => node.node_name === selectedNode)?.summary || "No summary available"}
+        </p>
+
+        <h4 className="font-semibold mt-2 text-black">Context drawn from:</h4>
+        <ul className="list-disc pl-4">
+          {Object.entries(jsonData.find(node => node.node_name === selectedNode)?.contextual_relation || {}).map(([key, value]) => (
+            <li key={key} className="text-sm text-black">
+              <strong>{key}:</strong> {value}
+            </li>
+          ))}
+        </ul>
+      </div>
+    )}
       
       <div className="flex-grow border rounded-lg overflow-hidden">
         <ReactFlow 

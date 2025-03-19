@@ -111,23 +111,29 @@ export default function ContextualGraph({ graphData, selectedNode, setSelectedNo
 
       {/* Context Card */}
       {showContext && selectedNode && (
-      <div className="p-4 border rounded-lg bg-green-100 shadow-md mb-2">
-        <h3 className="font-semibold text-black">Context for: {selectedNode}</h3>
+        <div className="p-4 border rounded-lg bg-green-100 shadow-md mb-2">
+          <h3 className="font-semibold text-black">Context for: {selectedNode}</h3>
 
-        <p className="text-sm text-black">
-          <strong>Summary:</strong> {jsonData.find(node => node.node_name === selectedNode)?.summary || "No summary available"}
-        </p>
+          <p className="text-sm text-black">
+            <strong>Summary:</strong>{" "}
+            {jsonData.find(node => node.node_name === selectedNode)?.summary || "No summary available"}
+          </p>
 
-        <h4 className="font-semibold mt-2 text-black">Context drawn from:</h4>
-        <ul className="list-disc pl-4">
-          {Object.entries(jsonData.find(node => node.node_name === selectedNode)?.contextual_relation || {}).map(([key, value]) => (
-            <li key={key} className="text-sm text-black">
-              <strong>{key}:</strong> {value}
-            </li>
-          ))}
-        </ul>
-      </div>
-    )}
+          {jsonData.find(node => node.node_name === selectedNode)?.contextual_relation &&
+            Object.keys(jsonData.find(node => node.node_name === selectedNode)?.contextual_relation).length > 0 && (
+              <>
+                <h4 className="font-semibold mt-2 text-black">Context drawn from:</h4>
+                <ul className="list-disc pl-4">
+                  {Object.entries(jsonData.find(node => node.node_name === selectedNode)?.contextual_relation).map(([key, value]) => (
+                    <li key={key} className="text-sm text-black">
+                      <strong>{key}:</strong> {value}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+        </div>
+      )}
       
       <div className="flex-grow border rounded-lg overflow-hidden">
         <ReactFlow 

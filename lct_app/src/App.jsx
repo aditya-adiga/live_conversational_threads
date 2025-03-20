@@ -2,14 +2,33 @@ import { useState } from "react";
 import Input from "./components/Input";
 import StructuralGraph from "./components/StructuralGraph";
 import ContextualGraph from "./components/ContextualGraph";
+import SaveJson from "./components/SaveJson";
 
 export default function App() {
   const [graphData, setGraphData] = useState([]); // Store received JSON data
   const [selectedNode, setSelectedNode] = useState(null); //for selecting node
+  const [chunkDict, setChunkDict] = useState({}); // for storing chunks
+  const [finalJson, setFinalJson] = useState({}); // for storing final json
+  const [isSaveDisabled, setIsSaveDisabled] = useState(true); // for disabling save button
 
   // Function to update state when new data is received
   const handleDataReceived = (newData) => {
     setGraphData(newData); // Update state with the latest streamed JSON
+    setIsSaveDisabled(true);
+  };
+
+  const handleChunksReceived = (chunks) => {
+    console.log("Received chunks:", chunks);
+    setChunkDict(chunks);
+    setIsSaveDisabled(true);
+  };
+
+  const handleFinalJsonReceived = (data) => {
+    console.log("Received final JSON:", data);
+    if (data.length > 0) {
+      setFinalJson(data[data.length - 1]); // Last chunk is final output
+      setIsSaveDisabled(false);
+    }
   };
 
   return (
@@ -41,11 +60,18 @@ export default function App() {
           </div>
         </div>
       </div>
-
-      {/* Fixed Chat-Like Input at the Bottom */}
+      
+      {/* Input and Save Button */}
       <div className="sticky bottom-0 w-full shadow-lg p-4">
-        <Input onDataReceived={handleDataReceived} /> {/* Pass handler to Input */}
+        <Input onChunksReceived={handleChunksReceived} onDataReceived={handleDataReceived} onFinalJsonReceived={handleFinalJsonReceived} /> {/* Pass handler to Input */}
       </div>
+      
+      {/* Save Button (Top Right Corner) */}
+      {Object.keys(chunkDict).length > 0 && Object.keys(finalJson).length > 0 && (
+        <div className="absolute top-4 right-4">
+          <SaveJson chunkDict={chunkDict} finalJson={finalJson} isSaveDisabled={isSaveDisabled} />
+        </div>
+      )}
     </div>
   );
 }

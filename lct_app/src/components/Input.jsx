@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 
-export default function Input({ onDataReceived }) {
+export default function Input({ onChunksReceived, onDataReceived, onFinalJsonReceived }) {
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState("");
   const [loading, setLoading] = useState(false); // Track loading state
@@ -25,13 +25,37 @@ export default function Input({ onDataReceived }) {
     }
   
     setLoading(true);
-    const formData = new FormData();
-    formData.append("transcript", text);
-  
+    const formData1 = new FormData();
+    formData1.append("transcript", text);
+    
     try {
+        // **Step 1: Get Chunks**
+        const chunkResponse = await fetch("http://localhost:8000/get_chunks/", {
+          method: "POST",
+          body: formData1,
+        });
+  
+        if (!chunkResponse.ok) {
+          throw new Error("Failed to fetch chunks");
+        }
+  
+        const chunkData = await chunkResponse.json();
+        const { chunks } = chunkData;
+  
+        if (!chunks || Object.keys(chunks).length === 0) {
+          throw new Error("No chunks received");
+        }
+
+        onChunksReceived(chunks); // Send chunks to App.jsx
+        console.log("Chunks received:", chunks);
+
+      // **Step 2: Send Chunks as JSON String**
+      const formData2 = new FormData();
+      formData2.append("chunks", JSON.stringify(chunks)); // Convert chunks object to JSON string
+
       const response = await fetch("http://localhost:8000/generate-context-stream", {
         method: "POST",
-        body: formData,
+        body: formData2,
       });
   
       if (!response.ok) {
@@ -41,7 +65,7 @@ export default function Input({ onDataReceived }) {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       
-      let receivedData = []; // Store all received chunks
+      let receivedData = []; // Store all received chunks (output of the stream)
   
       while (true) {
         const { value, done } = await reader.read();
@@ -62,6 +86,12 @@ export default function Input({ onDataReceived }) {
           }
         });
       }
+
+      // **Extract Final JSON Output**
+      if (receivedData.length > 0) {
+        onFinalJsonReceived(receivedData); // Send final output to App.jsx
+      }
+      console.log("Received data:", receivedData);
     } catch (error) {
       console.error("Error:", error);
       alert("Failed to fetch data. Please try again.");

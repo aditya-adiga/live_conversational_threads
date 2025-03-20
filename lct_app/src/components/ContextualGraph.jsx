@@ -94,10 +94,13 @@ export default function ContextualGraph({ graphData, selectedNode, setSelectedNo
 
         {/* Show Details Button */}
         <button 
-            className="px-4 py-2 bg-green-100 text-black rounded-lg shadow-md hover:bg-green-200 active:scale-95 transition" 
-            onClick={() => setShowContext(!showContext)}
+            className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
+                jsonData.length > 0 && selectedNode ? "bg-green-200 hover:bg-green-300" : "bg-gray-200 cursor-not-allowed"
+            }`} 
+            onClick={() => jsonData.length > 0 && selectedNode && setShowContext(!showContext)}
+            disabled={jsonData.length === 0 || !selectedNode}
         >
-            whats the context? 🕵️‍♂️
+            {showContext ? "Hide context" : "What's the context?"}
         </button>
 
         {/* Fullscreen Toggle Button */}

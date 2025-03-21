@@ -8,9 +8,10 @@ Check out our application demo:
 
 [![Live Conversational Threads Demo](https://img.youtube.com/vi/DEMO_VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=DEMO_VIDEO_ID) `// needs to be added.`
 
-For detailed documentation and understanding of conversational threading concepts, please refer to our [comprehensive guide](https://docs.google.com/document/d/your-doc-id/edit). `// needs to be added.`
+For detailed documentation and understanding of conversational threading concepts, please refer to our [project writeup](https://docs.google.com/document/d/11sC8fKkNCs09fFBztFqq6rp8b83UQiX2qA1kKF2GpYM/edit?usp=sharing). `// needs to be added.`
 
 ## Project Structure
+
 ```
 live_conversational_threads/
 ├── lct_python_backend/     # Python FastAPI backend
@@ -34,24 +35,28 @@ live_conversational_threads/
 ### Backend Setup
 
 1. Clone the repository:
+
 ```bash
 git clone https://github.com/yourusername/live_conversational_threads.git
 cd live_conversational_threads
 ```
 
 2. Create and activate a Conda environment:
+
 ```bash
 conda create -n lct_env python=3.8
 conda activate lct_env
 ```
 
 3. Install Python dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
 
 4. Set up environment variables:
-Create a `.env` file in the root directory with:
+   Create a `.env` file in the root directory with:
+
 ```
 ANTHROPIC_API_KEY=your_api_key_here
 ```
@@ -59,11 +64,13 @@ ANTHROPIC_API_KEY=your_api_key_here
 ### Frontend Setup
 
 1. Navigate to the frontend directory:
+
 ```bash
 cd lct_app
 ```
 
 2. Install Node.js dependencies:
+
 ```bash
 npm install
 ```
@@ -73,6 +80,7 @@ npm install
 ### Start the Backend Server
 
 1. From the root directory, with the conda environment activated:
+
 ```bash
 cd lct_python_backend
 uvicorn backend:lct_app --reload --port 8000
@@ -83,11 +91,13 @@ The backend API will be available at `http://localhost:8000`
 ### Start the Frontend Development Server
 
 1. In a new terminal, navigate to the frontend directory:
+
 ```bash
 cd lct_app
 ```
 
 2. Start the development server:
+
 ```bash
 npm run dev
 ```
@@ -97,6 +107,7 @@ The frontend application will be available at `http://localhost:5173`
 ## API Documentation
 
 Once the backend server is running, you can access:
+
 - Swagger UI documentation at `http://localhost:8000/docs`
 - ReDoc documentation at `http://localhost:8000/redoc`
 

@@ -1,6 +1,10 @@
 import { useState, useRef } from "react";
 
-export default function Input({ onChunksReceived, onDataReceived, onFinalJsonReceived }) {
+export default function Input({
+  onChunksReceived,
+  onDataReceived,
+  onFinalJsonReceived,
+}) {
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState("");
   const [loading, setLoading] = useState(false); // Track loading state
@@ -23,59 +27,62 @@ export default function Input({ onChunksReceived, onDataReceived, onFinalJsonRec
       alert("Please enter or upload a transcript!");
       return;
     }
-  
+
     setLoading(true);
     const formData1 = new FormData();
     formData1.append("transcript", text);
-    
-    try {
-        // **Step 1: Get Chunks**
-        const chunkResponse = await fetch("http://localhost:8000/get_chunks/", {
-          method: "POST",
-          body: formData1,
-        });
-  
-        if (!chunkResponse.ok) {
-          throw new Error("Failed to fetch chunks");
-        }
-  
-        const chunkData = await chunkResponse.json();
-        const { chunks } = chunkData;
-  
-        if (!chunks || Object.keys(chunks).length === 0) {
-          throw new Error("No chunks received");
-        }
 
-        onChunksReceived(chunks); // Send chunks to App.jsx
-        console.log("Chunks received:", chunks);
+    try {
+      // **Step 1: Get Chunks**
+      const chunkResponse = await fetch("http://localhost:8000/get_chunks/", {
+        method: "POST",
+        body: formData1,
+      });
+
+      if (!chunkResponse.ok) {
+        throw new Error("Failed to fetch chunks");
+      }
+
+      const chunkData = await chunkResponse.json();
+      const { chunks } = chunkData;
+
+      if (!chunks || Object.keys(chunks).length === 0) {
+        throw new Error("No chunks received");
+      }
+
+      onChunksReceived(chunks); // Send chunks to App.jsx
+      console.log("Chunks received:", chunks);
 
       // **Step 2: Send Chunks as JSON String**
       const formData2 = new FormData();
       formData2.append("chunks", JSON.stringify(chunks)); // Convert chunks object to JSON string
 
-      const response = await fetch("http://localhost:8000/generate-context-stream", {
-        method: "POST",
-        body: formData2,
-      });
-  
+      const response = await fetch(
+        "http://localhost:8000/generate-context-stream",
+        {
+          method: "POST",
+          body: formData2,
+        }
+      );
+
       if (!response.ok) {
         throw new Error("Failed to fetch data");
       }
-  
+
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      
+
       let receivedData = []; // Store all received chunks (output of the stream)
-  
+
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-  
+
         const chunk = decoder.decode(value, { stream: true });
-        
+
         // Split response by new lines (since JSONs are sent in lines)
         const jsonObjects = chunk.trim().split("\n");
-  
+
         jsonObjects.forEach((jsonStr) => {
           try {
             const jsonData = JSON.parse(jsonStr);
@@ -110,9 +117,15 @@ export default function Input({ onChunksReceived, onDataReceived, onFinalJsonRec
         >
           📂
         </button>
-        
+
         {/* Hidden File Input */}
-        <input type="file" accept=".txt" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+        <input
+          type="file"
+          accept=".txt"
+          ref={fileInputRef}
+          className="hidden"
+          onChange={handleFileUpload}
+        />
 
         {/* Text Input Field */}
         <textarea
@@ -134,7 +147,11 @@ export default function Input({ onChunksReceived, onDataReceived, onFinalJsonRec
         </button>
       </div>
 
-      {fileName && <p className="text-sm text-gray-300 text-center font-semibold mt-1">Uploaded: {fileName}</p>}
+      {fileName && (
+        <p className="text-sm text-gray-300 text-center font-semibold mt-1">
+          Uploaded: {fileName}
+        </p>
+      )}
     </div>
   );
 }

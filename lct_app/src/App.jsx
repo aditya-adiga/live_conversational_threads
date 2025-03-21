@@ -3,6 +3,7 @@ import Input from "./components/Input";
 import StructuralGraph from "./components/StructuralGraph";
 import ContextualGraph from "./components/ContextualGraph";
 import SaveJson from "./components/SaveJson";
+import Legend from "./components/Legend";
 
 export default function App() {
   const [graphData, setGraphData] = useState([]); // Store received JSON data
@@ -38,40 +39,63 @@ export default function App() {
         <h1 className="text-4xl font-bold">Live Conversational Threads</h1>
       </div>
 
+      {/* Add the legend in the corner */}
+      <div className="absolute bottom-4 right-4">
+        <Legend />
+      </div>
+
       {/* Main Graph Area (Takes Up Available Space) */}
       <div className="flex-grow flex justify-center items-center p-6">
         <div className="flex space-x-7 w-full max-w-15xl">
           {/* Structural Flow */}
           <div className="w-1/3 bg-white rounded-lg shadow-lg p-4">
-            <h2 className="text-xl font-bold text-gray-800 text-center mb-2">Structural Flow</h2>
-            <StructuralGraph 
-              graphData={graphData} 
-              selectedNode={selectedNode} 
-              setSelectedNode={setSelectedNode}/> {/* Pass data to GraphComponent */}
+            <h2 className="text-xl font-bold text-gray-800 text-center mb-2">
+              Structural Flow
+            </h2>
+            <StructuralGraph
+              graphData={graphData}
+              selectedNode={selectedNode}
+              setSelectedNode={setSelectedNode}
+            />{" "}
+            {/* Pass data to GraphComponent */}
           </div>
 
           {/* Relational Flow */}
           <div className="w-2/3 bg-white rounded-lg shadow-lg p-4">
-            <h2 className="text-xl font-bold text-gray-800 text-center mb-2">Contextual Flow</h2>
-            <ContextualGraph 
-              graphData={graphData} 
-              selectedNode={selectedNode} 
-              setSelectedNode={setSelectedNode} /> {/* Pass data to GraphComponent */}
+            <h2 className="text-xl font-bold text-gray-800 text-center mb-2">
+              Contextual Flow
+            </h2>
+            <ContextualGraph
+              graphData={graphData}
+              selectedNode={selectedNode}
+              setSelectedNode={setSelectedNode}
+            />{" "}
+            {/* Pass data to GraphComponent */}
           </div>
         </div>
       </div>
-      
+
       {/* Input and Save Button */}
       <div className="sticky bottom-0 w-full shadow-lg p-4">
-        <Input onChunksReceived={handleChunksReceived} onDataReceived={handleDataReceived} onFinalJsonReceived={handleFinalJsonReceived} /> {/* Pass handler to Input */}
+        <Input
+          onChunksReceived={handleChunksReceived}
+          onDataReceived={handleDataReceived}
+          onFinalJsonReceived={handleFinalJsonReceived}
+        />{" "}
+        {/* Pass handler to Input */}
       </div>
-      
+
       {/* Save Button (Top Right Corner) */}
-      {Object.keys(chunkDict).length > 0 && Object.keys(finalJson).length > 0 && (
-        <div className="absolute top-4 right-4">
-          <SaveJson chunkDict={chunkDict} finalJson={finalJson} isSaveDisabled={isSaveDisabled} />
-        </div>
-      )}
+      {Object.keys(chunkDict).length > 0 &&
+        Object.keys(finalJson).length > 0 && (
+          <div className="absolute top-4 right-4">
+            <SaveJson
+              chunkDict={chunkDict}
+              finalJson={finalJson}
+              isSaveDisabled={isSaveDisabled}
+            />
+          </div>
+        )}
     </div>
   );
 }

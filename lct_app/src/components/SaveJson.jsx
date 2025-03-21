@@ -61,11 +61,15 @@ export default function SaveJson({ chunkDict, finalJson, isSaveDisabled }) {
       {/* Save Button (Only Disabled When There’s No Data) */}
       <button
         className={`absolute top-4 right-4 px-3 py-1.5 rounded-lg shadow-md text-sm font-semibold 
-                    ${isSaveDisabled ? "bg-gray-400 cursor-not-allowed" : "bg-yellow-400 hover:bg-yellow-500 text-white"}`}
+                    ${
+                      isSaveDisabled
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-yellow-400 hover:bg-yellow-500 text-white"
+                    }`}
         onClick={() => !isSaveDisabled && setIsDialogOpen(true)}
         disabled={isSaveDisabled}
       >
-        Save JSON
+        Save graph
       </button>
 
       {/* Dialog Box (Appears on top, no background overlay) */}
@@ -93,7 +97,11 @@ export default function SaveJson({ chunkDict, finalJson, isSaveDisabled }) {
             </button>
             <button
               className={`px-4 py-2 rounded-lg shadow-md text-sm font-semibold 
-                          ${!fileName.trim() ? "bg-gray-400 cursor-not-allowed" : "bg-green-500 hover:bg-green-600 text-white"}`}
+                          ${
+                            !fileName.trim()
+                              ? "bg-gray-400 cursor-not-allowed"
+                              : "bg-green-500 hover:bg-green-600 text-white"
+                          }`}
               onClick={handleSave}
               disabled={!fileName.trim()} // Disable if filename is empty
             >

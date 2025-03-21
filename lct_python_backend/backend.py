@@ -68,7 +68,6 @@ def generate_lct_json(transcript, temp = 0.6):
         client = anthropic.Anthropic(
             api_key=os.getenv("ANTHROPIC_API_KEY"),
         )
-
         message = client.messages.create(
         # model="claude-3-5-haiku-20241022", 
         model="claude-3-7-sonnet-20250219",
@@ -97,7 +96,7 @@ def generate_lct_json(transcript, temp = 0.6):
         ]
     )
 
-        json_text = "[\n{" + message.content[0].text  
+        json_text = "[\n{" + message.content[0].text
         try:
             json_data = json.loads(json_text)  
             return json_data
@@ -141,7 +140,7 @@ def stream_generate_context_json(chunks: Dict[str, str]) -> Generator[str, None,
 
         if output_json is None:
             yield json.dumps({
-                "chunk": i + 1,
+                # "chunk": i + 1,
                 "error": f"Chunk {i+1} returned invalid JSON.",
                 "existing_json": existing_json  # Send whatever we have so far
             }) + "\n"
@@ -151,7 +150,7 @@ def stream_generate_context_json(chunks: Dict[str, str]) -> Generator[str, None,
 
         # Yield full updated JSON after each iteration
         yield json.dumps({
-            "chunk": i + 1,
+            # "chunk": i + 1,
             "existing_json": existing_json
         }) + "\n"
 

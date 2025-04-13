@@ -140,5 +140,11 @@ dist
 # Python cache
 __pycache__/
 
+# notebooks
+*.ipynb
+
 # virtual environment
 venv/
+
+# saved JSON files
+/saved_json

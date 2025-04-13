@@ -6,30 +6,18 @@ import SaveJson from "./components/SaveJson";
 import Legend from "./components/Legend";
 
 export default function App() {
-  const [graphData, setGraphData] = useState([]); // Store received JSON data
-  const [selectedNode, setSelectedNode] = useState(null); //for selecting node
-  const [chunkDict, setChunkDict] = useState({}); // for storing chunks
-  const [finalJson, setFinalJson] = useState({}); // for storing final json
-  const [isSaveDisabled, setIsSaveDisabled] = useState(true); // for disabling save button
+  const [graphData, setGraphData] = useState([]); // Stores graph data
+  const [selectedNode, setSelectedNode] = useState(null); // Tracks selected node
+  const [chunkDict, setChunkDict] = useState({}); // Stores chunk data
 
-  // Function to update state when new data is received
+  // Handles streamed JSON data
   const handleDataReceived = (newData) => {
-    setGraphData(newData); // Update state with the latest streamed JSON
-    setIsSaveDisabled(true);
+    setGraphData(newData);
   };
 
+  // Handles received chunks
   const handleChunksReceived = (chunks) => {
-    console.log("Received chunks:", chunks);
     setChunkDict(chunks);
-    setIsSaveDisabled(true);
-  };
-
-  const handleFinalJsonReceived = (data) => {
-    console.log("Received final JSON:", data);
-    if (data.length > 0) {
-      setFinalJson(data[data.length - 1]); // Last chunk is final output
-      setIsSaveDisabled(false);
-    }
   };
 
   return (
@@ -39,15 +27,15 @@ export default function App() {
         <h1 className="text-4xl font-bold">Live Conversational Threads</h1>
       </div>
 
-      {/* Add the legend in the corner */}
+      {/* Legend */}
       <div className="absolute bottom-4 right-4">
         <Legend />
       </div>
 
-      {/* Main Graph Area (Takes Up Available Space) */}
+      {/* Graph Section */}
       <div className="flex-grow flex justify-center items-center p-6">
         <div className="flex space-x-7 w-full max-w-15xl">
-          {/* Structural Flow */}
+          {/* Structural Graph */}
           <div className="w-1/3 bg-white rounded-lg shadow-lg p-4">
             <h2 className="text-xl font-bold text-gray-800 text-center mb-2">
               Structural Flow
@@ -56,46 +44,38 @@ export default function App() {
               graphData={graphData}
               selectedNode={selectedNode}
               setSelectedNode={setSelectedNode}
-            />{" "}
-            {/* Pass data to GraphComponent */}
+            />
           </div>
 
-          {/* Relational Flow */}
+          {/* Contextual Graph */}
           <div className="w-2/3 bg-white rounded-lg shadow-lg p-4">
             <h2 className="text-xl font-bold text-gray-800 text-center mb-2">
               Contextual Flow
             </h2>
             <ContextualGraph
               graphData={graphData}
+              setGraphData={setGraphData}
               selectedNode={selectedNode}
               setSelectedNode={setSelectedNode}
-            />{" "}
-            {/* Pass data to GraphComponent */}
+            />
           </div>
         </div>
       </div>
 
-      {/* Input and Save Button */}
+      {/* Input Section */}
       <div className="sticky bottom-0 w-full shadow-lg p-4">
         <Input
           onChunksReceived={handleChunksReceived}
           onDataReceived={handleDataReceived}
-          onFinalJsonReceived={handleFinalJsonReceived}
-        />{" "}
-        {/* Pass handler to Input */}
+        />
       </div>
 
-      {/* Save Button (Top Right Corner) */}
-      {Object.keys(chunkDict).length > 0 &&
-        Object.keys(finalJson).length > 0 && (
-          <div className="absolute top-4 right-4">
-            <SaveJson
-              chunkDict={chunkDict}
-              finalJson={finalJson}
-              isSaveDisabled={isSaveDisabled}
-            />
-          </div>
-        )}
+      {/* Save Button */}
+      {graphData.length > 0 && (
+        <div className="absolute top-4 right-4">
+          <SaveJson chunkDict={chunkDict} graphData={graphData} />
+        </div>
+      )}
     </div>
   );
 }

@@ -1,9 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 
-export default function SaveJson({ chunkDict, finalJson, isSaveDisabled }) {
+export default function SaveJson({ chunkDict, graphData }) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [fileName, setFileName] = useState("");
   const dialogRef = useRef(null);
+
+  // Disable Save if no chunkDict or graphData is available
+  const isSaveDisabled = !graphData || Object.keys(graphData).length === 0;
 
   // Close dialog if clicked outside
   useEffect(() => {
@@ -29,9 +32,9 @@ export default function SaveJson({ chunkDict, finalJson, isSaveDisabled }) {
     }
 
     const dataToSave = {
-      file_name: fileName,
-      chunks: chunkDict,
-      final_output: finalJson,
+      file_name: fileName.trim(),
+      chunks: chunkDict || {}, // Ensure it's an object
+      graph_data: graphData || {}, // Ensure it's an object
     };
 
     try {
@@ -39,6 +42,7 @@ export default function SaveJson({ chunkDict, finalJson, isSaveDisabled }) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Accept: "application/json",
         },
         body: JSON.stringify(dataToSave),
       });
@@ -58,21 +62,21 @@ export default function SaveJson({ chunkDict, finalJson, isSaveDisabled }) {
 
   return (
     <div className="relative">
-      {/* Save Button (Only Disabled When There’s No Data) */}
+      {/* Save Button */}
       <button
-        className={`absolute top-4 right-4 px-3 py-1.5 rounded-lg shadow-md text-sm font-semibold 
-                    ${
-                      isSaveDisabled
-                        ? "bg-gray-400 cursor-not-allowed"
-                        : "bg-yellow-400 hover:bg-yellow-500 text-white"
-                    }`}
+        className={`absolute top-4 right-4 px-3 py-1.5 rounded-lg shadow-md text-sm font-semibold whitespace-nowrap  
+                  ${
+                    isSaveDisabled
+                      ? "bg-gray-200 cursor-not-allowed"
+                      : "bg-green-200 hover:bg-green-300 text-white"
+                  }`}
         onClick={() => !isSaveDisabled && setIsDialogOpen(true)}
         disabled={isSaveDisabled}
       >
-        Save graph
+        Save Conversation
       </button>
 
-      {/* Dialog Box (Appears on top, no background overlay) */}
+      {/* Dialog Box */}
       {isDialogOpen && (
         <div
           ref={dialogRef}
@@ -90,7 +94,7 @@ export default function SaveJson({ chunkDict, finalJson, isSaveDisabled }) {
 
           <div className="flex justify-end space-x-2 mt-4">
             <button
-              className="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded-lg"
+              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg"
               onClick={() => setIsDialogOpen(false)}
             >
               Cancel
@@ -99,8 +103,8 @@ export default function SaveJson({ chunkDict, finalJson, isSaveDisabled }) {
               className={`px-4 py-2 rounded-lg shadow-md text-sm font-semibold 
                           ${
                             !fileName.trim()
-                              ? "bg-gray-400 cursor-not-allowed"
-                              : "bg-green-500 hover:bg-green-600 text-white"
+                              ? "bg-gray-200 cursor-not-allowed"
+                              : "bg-green-200 hover:bg-green-300 text-white"
                           }`}
               onClick={handleSave}
               disabled={!fileName.trim()} // Disable if filename is empty

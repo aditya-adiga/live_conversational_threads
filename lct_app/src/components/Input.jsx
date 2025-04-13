@@ -1,10 +1,6 @@
 import { useState, useRef } from "react";
 
-export default function Input({
-  onChunksReceived,
-  onDataReceived,
-  onFinalJsonReceived,
-}) {
+export default function Input({ onChunksReceived, onDataReceived }) {
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState("");
   const [loading, setLoading] = useState(false); // Track loading state
@@ -29,18 +25,21 @@ export default function Input({
     }
 
     setLoading(true);
-    const formData1 = new FormData();
-    formData1.append("transcript", text);
+    // const formData1 = new FormData();
+    // formData1.append("transcript", text);
 
     try {
       // **Step 1: Get Chunks**
       const chunkResponse = await fetch("http://localhost:8000/get_chunks/", {
         method: "POST",
-        body: formData1,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ transcript: text }),
       });
 
       if (!chunkResponse.ok) {
-        throw new Error("Failed to fetch chunks");
+        throw new Error(`Failed to fetch chunks: ${chunkResponse.statusText}`);
       }
 
       const chunkData = await chunkResponse.json();
@@ -54,19 +53,19 @@ export default function Input({
       console.log("Chunks received:", chunks);
 
       // **Step 2: Send Chunks as JSON String**
-      const formData2 = new FormData();
-      formData2.append("chunks", JSON.stringify(chunks)); // Convert chunks object to JSON string
-
       const response = await fetch(
-        "http://localhost:8000/generate-context-stream",
+        "http://localhost:8000/generate-context-stream/",
         {
           method: "POST",
-          body: formData2,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ chunks }), // Sending JSON directly
         }
       );
 
       if (!response.ok) {
-        throw new Error("Failed to fetch data");
+        throw new Error(`Failed to fetch data: ${response.statusText}`);
       }
 
       const reader = response.body.getReader();
@@ -79,6 +78,7 @@ export default function Input({
         if (done) break;
 
         const chunk = decoder.decode(value, { stream: true });
+        if (!chunk) continue;
 
         // Split response by new lines (since JSONs are sent in lines)
         const jsonObjects = chunk.trim().split("\n");
@@ -95,9 +95,11 @@ export default function Input({
       }
 
       // **Extract Final JSON Output**
-      if (receivedData.length > 0) {
-        onFinalJsonReceived(receivedData); // Send final output to App.jsx
+      if (receivedData.length === 0) {
+        throw new Error("No data received from the server.");
       }
+
+      // onFinalJsonReceived(receivedData); // Send final output to App.jsx
       console.log("Received data:", receivedData);
     } catch (error) {
       console.error("Error:", error);

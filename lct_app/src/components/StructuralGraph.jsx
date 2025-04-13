@@ -10,13 +10,13 @@ export default function StructuralGraph({
 }) {
   const [isFullScreen, setIsFullScreen] = useState(false);
 
-  const latestChunk = graphData?.[graphData.length - 1] || {};
-  const jsonData = latestChunk.existing_json || [];
+  const latestChunk = graphData?.[graphData.length - 1] || [];
+  // const jsonData = latestChunk.existing_json || [];
 
   useEffect(() => {
-    // console.log("Full Graph Data:", graphData);
-    // console.log("Latest Chunk Data:", latestChunk);
-    console.log("Extracted JSON Data:", jsonData);
+    console.log("Full Graph Data(Structural):", graphData);
+    console.log("Latest Chunk Data(Structural):", latestChunk);
+    // console.log("Extracted JSON Data:", jsonData);
   }, [graphData]);
 
   // Dagre Graph Configuration
@@ -26,91 +26,85 @@ export default function StructuralGraph({
 
   // Generate nodes and edges
   const { nodes, edges } = useMemo(() => {
-    const nodes = jsonData.map((item) => ({
-      id: item.node_name,
-      data: { label: item.node_name },
-      position: { x: 0, y: 0 }, // Dagre will handle positioning
-      style: {
-        background:
-          selectedNode === item.node_name
-            ? "#ffcc00" // Highlighted node (Yellow)
-            : item.is_formalism
-            ? "#ccffcc" // Formalism node (Light Green)
-            : item.is_bookmark
-            ? "#cce5ff" // Bookmarked node (Light Blue)
-            : "white",
-        border:
-          selectedNode === item.node_name
-            ? "3px solid #ff8800"
-            : item.is_formalism
-            ? "2px solid #33cc33" // Formalism node border (Green)
-            : item.is_bookmark
-            ? "2px solid #3399ff" // Bookmarked node border (Blue)
-            : "1px solid #ccc",
-        boxShadow:
-          selectedNode === item.node_name
-            ? "0px 0px 15px rgba(255, 136, 0, 0.8)"
-            : item.is_formalism
-            ? "0px 0px 10px rgba(51, 204, 51, 0.6)" // Formalism node glow
-            : item.is_bookmark
-            ? "0px 0px 10px rgba(51, 153, 255, 0.6)" // Bookmarked node glow
-            : "none",
-        transition: "all 0.3s ease-in-out",
-      },
-    }));
+    const nodes = latestChunk.map((item) => {
+      let background, border, boxShadow;
 
-    const edges = jsonData
-      .filter((item) => item.predecessor)
-      .map((item) => {
-        // Find predecessor node data
-        const predecessorNode = jsonData.find(
-          (n) => n.node_name === item.predecessor
+      if (item.is_formalism) {
+        background = "#ccffcc"; // Light Green
+        border = "2px solid #33cc33"; // Green Border
+        boxShadow = "0px 0px 10px rgba(51, 204, 51, 0.6)"; // Green Glow
+      } else if (item.is_bookmark) {
+        background = "#cce5ff"; // Light Blue
+        border = "2px solid #3399ff"; // Blue Border
+        boxShadow = "0px 0px 10px rgba(51, 153, 255, 0.6)"; // Blue Glow
+      } else if (selectedNode === item.node_name) {
+        background = "#ffcc00"; // Yellow for selected
+        border = "3px solid #ff8800"; // Orange Border
+        boxShadow = "0px 0px 15px rgba(255, 136, 0, 0.8)"; // Orange Glow
+      } else {
+        background = "white";
+        border = "1px solid #ccc";
+        boxShadow = "none";
+      }
+
+      return {
+        id: item.node_name,
+        data: { label: item.node_name },
+        position: { x: 0, y: 0 }, // Dagre will handle positioning
+        style: {
+          background,
+          border,
+          boxShadow,
+          transition: "all 0.3s ease-in-out",
+        },
+      };
+    });
+
+    const edges = latestChunk.flatMap((item) =>
+      Object.keys(item.contextual_relation || {}).map((relatedNode) => {
+        const relatedNodeData = latestChunk.find(
+          (n) => n.node_name === relatedNode
         );
 
-        // Check if either node in the edge is in linked_nodes
         const isLinkedEdge =
-          item.linked_nodes.includes(item.predecessor) ||
-          (predecessorNode?.linked_nodes || []).includes(item.node_name);
+          item.linked_nodes.includes(relatedNode) ||
+          (relatedNodeData?.linked_nodes || []).includes(item.node_name); // Check if either node in the edge is in linked_nodes
 
-        // Check if either node in the edge has is_formalism = true
         const isFormalismEdge =
-          isLinkedEdge && (item.is_formalism || predecessorNode?.is_formalism);
+          isLinkedEdge && (item.is_formalism || relatedNodeData?.is_formalism); // Check if either node in the edge has is_formalism = true
 
         return {
-          id: `e-${item.predecessor}-${item.node_name}`,
-          source: item.predecessor,
+          id: `e-${relatedNode}-${item.node_name}`,
+          source: relatedNode,
           target: item.node_name,
           animated: true,
           style: {
             stroke:
-              selectedNode === item.node_name ||
-              selectedNode === item.predecessor
+              selectedNode === item.node_name
                 ? "#ff8800" // Orange for selected node edges
                 : isFormalismEdge
                 ? "#33cc33" // Green for formalism-related edges
                 : "#898989", // Default blue
             strokeWidth:
-              selectedNode === item.node_name ||
-              selectedNode === item.predecessor ||
-              isFormalismEdge
-                ? 3.5 // Thicker edge for selected/formalism nodes
-                : 2,
-            transition: "stroke 0.3s ease-in-out",
+              selectedNode === item.node_name || isFormalismEdge ? 3.5 : 2,
+            opacity:
+              selectedNode === item.node_name || isFormalismEdge ? 1 : 0.6,
+            transition: "all 0.3s ease-in-out",
           },
           markerEnd: {
             type: "arrowclosed",
             width: 10,
             height: 10,
             color:
-              selectedNode === item.node_name ||
-              selectedNode === item.predecessor
-                ? "#ff8800" // Highlighted arrow
+              selectedNode === item.node_name
+                ? "#ff8800"
                 : isFormalismEdge
-                ? "#33cc33" // Green for formalism edges
-                : "#898989", // Default arrow
+                ? "#33cc33"
+                : "#898989",
           },
         };
-      });
+      })
+    );
 
     // Add nodes & edges to Dagre graph
     nodes.forEach((node) =>
@@ -127,7 +121,7 @@ export default function StructuralGraph({
     }));
 
     return { nodes: positionedNodes, edges };
-  }, [jsonData, selectedNode]);
+  }, [latestChunk, selectedNode]);
 
   return (
     <div
@@ -157,7 +151,11 @@ export default function StructuralGraph({
           nodes={nodes}
           edges={edges}
           fitView
-          onNodeClick={(_, node) => setSelectedNode && setSelectedNode(node.id)} // Sync selection
+          onNodeClick={(_, node) =>
+            setSelectedNode((prevSelected) =>
+              prevSelected === node.id ? null : node.id
+            )
+          } // Sync selection
         >
           <Controls />
           <Background />

@@ -51,7 +51,7 @@ export default function SaveJson({ chunkDict, graphData }) {
         throw new Error("Failed to save JSON");
       }
 
-      alert("JSON saved successfully!");
+      alert("Live Conversation Thread saved successfully!");
       setIsDialogOpen(false);
       setFileName(""); // Reset input field
     } catch (error) {

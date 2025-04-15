@@ -60,35 +60,45 @@ export default function StructuralGraph({
       };
     });
 
-    const edges = latestChunk.flatMap((item) =>
-      Object.keys(item.contextual_relation || {}).map((relatedNode) => {
-        const relatedNodeData = latestChunk.find(
-          (n) => n.node_name === relatedNode
+    const edges = latestChunk
+      .filter((item) => item.predecessor)
+      .map((item) => {
+        const predecessorNode = latestChunk.find(
+          (n) => n.node_name === item.predecessor
         );
 
         const isLinkedEdge =
-          item.linked_nodes.includes(relatedNode) ||
-          (relatedNodeData?.linked_nodes || []).includes(item.node_name); // Check if either node in the edge is in linked_nodes
+          item.linked_nodes?.includes(item.predecessor) ||
+          predecessorNode?.linked_nodes?.includes(item.node_name);
 
         const isFormalismEdge =
-          isLinkedEdge && (item.is_formalism || relatedNodeData?.is_formalism); // Check if either node in the edge has is_formalism = true
+          isLinkedEdge && (item.is_formalism || predecessorNode?.is_formalism);
 
         return {
-          id: `e-${relatedNode}-${item.node_name}`,
-          source: relatedNode,
+          id: `e-${item.predecessor}-${item.node_name}`,
+          source: item.predecessor,
           target: item.node_name,
           animated: true,
           style: {
             stroke:
-              selectedNode === item.node_name
-                ? "#ff8800" // Orange for selected node edges
+              selectedNode === item.node_name ||
+              selectedNode === item.predecessor
+                ? "#ff8800"
                 : isFormalismEdge
-                ? "#33cc33" // Green for formalism-related edges
-                : "#898989", // Default blue
+                ? "#33cc33"
+                : "#898989",
             strokeWidth:
-              selectedNode === item.node_name || isFormalismEdge ? 3.5 : 2,
+              selectedNode === item.node_name ||
+              selectedNode === item.predecessor ||
+              isFormalismEdge
+                ? 3.5
+                : 2,
             opacity:
-              selectedNode === item.node_name || isFormalismEdge ? 1 : 0.6,
+              selectedNode === item.node_name ||
+              selectedNode === item.predecessor ||
+              isFormalismEdge
+                ? 1
+                : 0.6,
             transition: "all 0.3s ease-in-out",
           },
           markerEnd: {
@@ -96,15 +106,15 @@ export default function StructuralGraph({
             width: 10,
             height: 10,
             color:
-              selectedNode === item.node_name
+              selectedNode === item.node_name ||
+              selectedNode === item.predecessor
                 ? "#ff8800"
                 : isFormalismEdge
                 ? "#33cc33"
                 : "#898989",
           },
         };
-      })
-    );
+      });
 
     // Add nodes & edges to Dagre graph
     nodes.forEach((node) =>
@@ -128,7 +138,7 @@ export default function StructuralGraph({
       className={`flex flex-col bg-white shadow-lg rounded-lg p-4 transition-all duration-300 ${
         isFullScreen
           ? "absolute top-0 left-0 w-full h-full z-50"
-          : "w-full h-[500px]"
+          : "w-full h-[calc(100%-40px)]"
       }`}
     >
       <div className="flex justify-between items-center mb-2">

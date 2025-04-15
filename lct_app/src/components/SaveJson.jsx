@@ -68,7 +68,7 @@ export default function SaveJson({ chunkDict, graphData }) {
                   ${
                     isSaveDisabled
                       ? "bg-gray-200 cursor-not-allowed"
-                      : "bg-green-200 hover:bg-green-300 text-white"
+                      : "bg-green-300 hover:bg-green-400 text-white"
                   }`}
         onClick={() => !isSaveDisabled && setIsDialogOpen(true)}
         disabled={isSaveDisabled}
@@ -80,7 +80,7 @@ export default function SaveJson({ chunkDict, graphData }) {
       {isDialogOpen && (
         <div
           ref={dialogRef}
-          className="absolute top-12 right-4 bg-white p-4 rounded-lg shadow-xl border w-80 text-black"
+          className="absolute top-12 right-4 bg-white p-4 rounded-lg shadow-xl border w-80 text-black z-20"
         >
           <h2 className="text-lg font-bold mb-3">Enter File Name</h2>
 
@@ -94,7 +94,7 @@ export default function SaveJson({ chunkDict, graphData }) {
 
           <div className="flex justify-end space-x-2 mt-4">
             <button
-              className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg"
+              className="px-4 py-2 bg-gray-300 hover:bg-gray-400 rounded-lg"
               onClick={() => setIsDialogOpen(false)}
             >
               Cancel
@@ -103,8 +103,8 @@ export default function SaveJson({ chunkDict, graphData }) {
               className={`px-4 py-2 rounded-lg shadow-md text-sm font-semibold 
                           ${
                             !fileName.trim()
-                              ? "bg-gray-200 cursor-not-allowed"
-                              : "bg-green-200 hover:bg-green-300 text-white"
+                              ? "bg-gray-300 cursor-not-allowed"
+                              : "bg-green-300 hover:bg-green-400 text-white"
                           }`}
               onClick={handleSave}
               disabled={!fileName.trim()} // Disable if filename is empty

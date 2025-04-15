@@ -1,6 +1,6 @@
 export default function Legend() {
   return (
-    <div className="shadow-md rounded-lg p-2 text-xs text-gray-700 border border-gray-300 bg-white">
+    <div className="shadow-md rounded-lg p-2 text-xs text-gray-700 border border-gray-300 bg-white z-20">
       <h4 className="text-center font-semibold mb-1">Legend</h4>
       <div className="flex flex-col gap-1">
         <div className="flex items-center">

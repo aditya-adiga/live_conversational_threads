@@ -5,7 +5,7 @@ Liam: That’s what I need. I keep forgetting small tasks. I was supposed to rev
 Maya: Ha! Been there. Speaking of which, how’s the report going?
 Liam: It’s mostly done, but I need to polish some sections.
 Maya: Want me to take a quick look?
-Liam: That’d be great. Oh wait, let me make a note of this. Lingardium bookmarkium create Report Review.
+Liam: That’d be great. Oh wait, let me make a note of this. LLM wish bookmark create Report Review.
 Maya: Smart move. We’ll get back to it later.
 Liam: Yeah. Anyway, have you seen the news about that AI-powered chatbot that can simulate real conversations?
 Maya: Oh yeah, it’s wild! People are saying it might replace customer service jobs.
@@ -16,7 +16,7 @@ Maya: Speaking of AI, have you looked into that new presentation tool? It suppos
 Liam: Oh yeah! I was thinking of using it for my upcoming presentation.
 Maya: That’s a great idea. What’s your topic?
 Liam: Data security in remote work. It’s a big concern now that more people are working from home.
-Maya: Definitely. Lingardium bookmarkium create Remote Work Security Notes.
+Maya: Definitely. LLM wish bookmark create Remote Work Security Notes.
 Liam: Oh, bookmarking that for later, huh? Smart.
 Maya: Yep! I have a feeling we’ll come back to this discussion.
 Liam: Hey, while we’re on the topic, have you noticed how some companies are monitoring employees more closely when they work remotely?
@@ -24,10 +24,10 @@ Maya: Ugh, yeah. The whole tracking-software thing feels invasive.
 Liam: Agreed. If you trust employees, you don’t need to micromanage them.
 Maya: Exactly. Maybe we should bring this up in your presentation.
 Liam: Good call. That actually ties in well with the security aspect.
-Maya: See? Bookmarking was a great idea. Lingardium bookmarkium open Remote Work Security Notes.
+Maya: See? Bookmarking was a great idea. LLM wish bookmark open Remote Work Security Notes.
 Liam: Oh, right! I should make a note to include this in my slides.
 Maya: Glad we circled back!
 Liam: Haha, yeah. By the way, remember the productivity app we were talking about earlier? I just realized I can use it to schedule my report review.
-Maya: Nice! That reminds me—Lingardium bookmarkium open Report Review.
+Maya: Nice! That reminds me—LLM wish bookmark open Report Review.
 Liam: Oh wow, you’re really using this system.
 Maya: Hey, it works! Now, let’s actually go review that report.

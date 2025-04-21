@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 
-export default function Input({ onDataReceived }) {
+export default function Input({ onChunksReceived, onDataReceived }) {
   const [text, setText] = useState("");
   const [fileName, setFileName] = useState("");
   const [loading, setLoading] = useState(false); // Track loading state
@@ -23,35 +23,66 @@ export default function Input({ onDataReceived }) {
       alert("Please enter or upload a transcript!");
       return;
     }
-  
+
     setLoading(true);
-    const formData = new FormData();
-    formData.append("transcript", text);
-  
+    // const formData1 = new FormData();
+    // formData1.append("transcript", text);
+
     try {
-      const response = await fetch("http://localhost:8000/generate-context-stream", {
+      // **Step 1: Get Chunks**
+      const chunkResponse = await fetch("http://localhost:8000/get_chunks/", {
         method: "POST",
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ transcript: text }),
       });
-  
-      if (!response.ok) {
-        throw new Error("Failed to fetch data");
+
+      if (!chunkResponse.ok) {
+        throw new Error(`Failed to fetch chunks: ${chunkResponse.statusText}`);
       }
-  
+
+      const chunkData = await chunkResponse.json();
+      const { chunks } = chunkData;
+
+      if (!chunks || Object.keys(chunks).length === 0) {
+        throw new Error("No chunks received");
+      }
+
+      onChunksReceived(chunks); // Send chunks to App.jsx
+      console.log("Chunks received:", chunks);
+
+      // **Step 2: Send Chunks as JSON String**
+      const response = await fetch(
+        "http://localhost:8000/generate-context-stream/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ chunks }), // Sending JSON directly
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch data: ${response.statusText}`);
+      }
+
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      
-      let receivedData = []; // Store all received chunks
-  
+
+      let receivedData = []; // Store all received chunks (output of the stream)
+
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
-  
+
         const chunk = decoder.decode(value, { stream: true });
-        
+        if (!chunk) continue;
+
         // Split response by new lines (since JSONs are sent in lines)
         const jsonObjects = chunk.trim().split("\n");
-  
+
         jsonObjects.forEach((jsonStr) => {
           try {
             const jsonData = JSON.parse(jsonStr);
@@ -62,6 +93,14 @@ export default function Input({ onDataReceived }) {
           }
         });
       }
+
+      // **Extract Final JSON Output**
+      if (receivedData.length === 0) {
+        throw new Error("No data received from the server.");
+      }
+
+      // onFinalJsonReceived(receivedData); // Send final output to App.jsx
+      console.log("Received data:", receivedData);
     } catch (error) {
       console.error("Error:", error);
       alert("Failed to fetch data. Please try again.");
@@ -80,9 +119,15 @@ export default function Input({ onDataReceived }) {
         >
           📂
         </button>
-        
+
         {/* Hidden File Input */}
-        <input type="file" accept=".txt" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+        <input
+          type="file"
+          accept=".txt"
+          ref={fileInputRef}
+          className="hidden"
+          onChange={handleFileUpload}
+        />
 
         {/* Text Input Field */}
         <textarea
@@ -104,7 +149,11 @@ export default function Input({ onDataReceived }) {
         </button>
       </div>
 
-      {fileName && <p className="text-sm text-gray-300 text-center font-semibold mt-1">Uploaded: {fileName}</p>}
+      {fileName && (
+        <p className="text-sm text-gray-300 text-center font-semibold mt-1">
+          Uploaded: {fileName}
+        </p>
+      )}
     </div>
   );
 }

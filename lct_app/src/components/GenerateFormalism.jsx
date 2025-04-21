@@ -1,16 +1,74 @@
 import { useState, useRef, useEffect } from "react";
 
 export default function GenerateFormalism({
+  chunkDict,
   graphData,
   isFormalismView,
   setIsFormalismView,
+  formalismData,
+  setFormalismData,
 }) {
-  const [isDialogOpen, setIsDialogOpen] = useState(false); // for preference dialogue box
-  const [userPrefDraft, setUserPrefDraft] = useState(""); // for saving temporary state of preference
-  const [userPref, setUserPref] = useState(""); // Stores user preference or wish
-  const dialogRef = useRef(null); // for identifying click outside
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [userPrefDraft, setUserPrefDraft] = useState("");
+  const [userPref, setUserPref] = useState("");
+  const [lastUsedPref, setLastUsedPref] = useState("");
+  const dialogRef = useRef(null);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const latestChunk = graphData?.[graphData.length - 1] || []; // latest graph data recieved.
+  const latestChunk = graphData?.[graphData.length - 1] || [];
+
+  const handleFormalismGenerate = async () => {
+    const dataForFormalism = {
+      chunks: chunkDict || {},
+      graph_data: graphData || {},
+      user_pref: userPref,
+    };
+
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(
+        "http://localhost:8000/generate_formalism/",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(dataForFormalism),
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to generate formalisms");
+
+      const data = await response.json();
+      setFormalismData(data);
+      setLastUsedPref(userPref); // Update last used pref here
+      setIsFormalismView(true); // Switch view after successful generation
+    } catch (error) {
+      console.error("Error generating Formalisms:", error);
+      alert("Error generating Formalisms. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Simplified button click handler
+  const handleMainButtonClick = () => {
+    if (isFormalismView) {
+      setIsFormalismView(false);
+    } else {
+      // Always regenerate if:
+      // 1. No formalism data exists
+      // 2. User preference has changed
+      // 3. Or if we're not currently loading
+      if (!formalismData || userPref !== lastUsedPref || !isLoading) {
+        handleFormalismGenerate();
+      } else {
+        setIsFormalismView(true);
+      }
+    }
+  };
 
   // Close dialog when clicking outside
   useEffect(() => {
@@ -39,27 +97,31 @@ export default function GenerateFormalism({
             onClick={() => {
               setIsDialogOpen(true);
               setUserPrefDraft(userPref);
-              console.log(userPref);
             }}
           >
             User Research Interest
           </button>
         )}
 
-        {/* Get Formalism List */}
+        {/* Main action button */}
         <button
-          className={`px-4 py-2 font-semibold rounded-lg shadow 
-            ${
-              (!userPref || latestChunk.length === 0) && !isFormalismView
-                ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                : "bg-white text-purple-700 hover:bg-gray-100"
-            }`}
-          onClick={() => {
-            setIsFormalismView((prev) => !prev);
-          }}
-          disabled={(!userPref || latestChunk.length === 0) && !isFormalismView}
+          className={`px-4 py-2 font-semibold rounded-lg shadow transition ${
+            (!userPref || latestChunk.length === 0 || isLoading) &&
+            !isFormalismView
+              ? "bg-gray-200 text-gray-500 cursor-not-allowed"
+              : "bg-white text-purple-700 hover:bg-gray-100"
+          }`}
+          onClick={handleMainButtonClick}
+          disabled={
+            (!userPref || latestChunk.length === 0 || isLoading) &&
+            !isFormalismView
+          }
         >
-          {isFormalismView ? "Browse Conversation" : "Generate Formalism"}
+          {isLoading
+            ? "Generating..."
+            : isFormalismView
+            ? "Browse Conversation"
+            : "Generate Formalism"}
         </button>
       </div>
 
@@ -77,7 +139,7 @@ export default function GenerateFormalism({
             className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
             placeholder="Enter research interest or field along which you want to explore formalisms..."
             value={userPrefDraft}
-            rows="2" // Adjust this based on how tall you want the text area
+            rows="2"
             onChange={(e) => setUserPrefDraft(e.target.value)}
           />
 
@@ -89,12 +151,11 @@ export default function GenerateFormalism({
               Cancel
             </button>
             <button
-              className={`px-4 py-2 rounded-lg shadow-md text-sm font-semibold 
-                            ${
-                              !userPrefDraft.trim()
-                                ? "bg-gray-300 cursor-not-allowed"
-                                : "bg-green-300 hover:bg-green-400 text-white"
-                            }`}
+              className={`px-4 py-2 rounded-lg shadow-md text-sm font-semibold ${
+                !userPrefDraft.trim()
+                  ? "bg-gray-300 cursor-not-allowed"
+                  : "bg-green-300 hover:bg-green-400 text-white"
+              }`}
               onClick={() => {
                 setUserPref(userPrefDraft.trim());
                 setIsDialogOpen(false);

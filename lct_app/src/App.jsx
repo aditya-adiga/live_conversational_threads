@@ -13,6 +13,8 @@ export default function App() {
   const [chunkDict, setChunkDict] = useState({}); // Stores chunk data
   const [isFormalismView, setIsFormalismView] = useState(false); // stores layout state: formalism or browsability
   const [selectedFormalism, setSelectedFormalism] = useState(null); // stores selected formalism
+  const [formalismData, setFormalismData] = useState({}); // Stores Formalism data
+  const [selectedLoopyURL, setSelectedLoopyURL] = useState(""); // Stores Loopy URL
 
   // Handles streamed JSON data
   const handleDataReceived = (newData) => {
@@ -71,7 +73,9 @@ export default function App() {
               <FormalismList
                 selectedFormalism={selectedFormalism}
                 setSelectedFormalism={setSelectedFormalism}
-                graphData={graphData}
+                formalismData={formalismData}
+                setFormalismData={setFormalismData}
+                setSelectedLoopyURL={setSelectedLoopyURL}
               />
             </div>
 
@@ -90,11 +94,22 @@ export default function App() {
           </div>
 
           {/* Bottom - Canvas */}
-          <div className="h-3/5 bg-white rounded-lg shadow-lg p-4">
-            <h2 className="text-xl font-bold text-gray-800 mb-2">
+          <div className="h-3/5 bg-white rounded-lg shadow-lg p-4 flex flex-col">
+            <h2 className="text-xl font-bold text-gray-800 text-center mb-2">
               Formalism Model Diagram
             </h2>
-            <div className="text-gray-600">Area placeholder for model...</div>
+
+            <div className="flex-1 flex items-center justify-center">
+              <button
+                onClick={() => {
+                  const url = selectedLoopyURL || "https://ncase.me/loopy/";
+                  window.open(url, "_blank");
+                }}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition-colors"
+              >
+                {selectedLoopyURL ? "View Model" : "Open Loopy Editor"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -102,9 +117,12 @@ export default function App() {
       {/* GenerateFormalism Section */}
       <div className="sticky bottom-0 w-full p-4 z-10">
         <GenerateFormalism
+          chunkDict={chunkDict}
           graphData={graphData}
           isFormalismView={isFormalismView}
           setIsFormalismView={setIsFormalismView}
+          formalismData={formalismData}
+          setFormalismData={setFormalismData}
         />
       </div>
 

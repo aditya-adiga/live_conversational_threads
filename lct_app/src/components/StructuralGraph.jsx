@@ -29,7 +29,7 @@ export default function StructuralGraph({
     const nodes = latestChunk.map((item) => {
       let background, border, boxShadow;
 
-      if (item.is_formalism) {
+      if (item.is_contextual_progress) {
         background = "#ccffcc"; // Light Green
         border = "2px solid #33cc33"; // Green Border
         boxShadow = "0px 0px 10px rgba(51, 204, 51, 0.6)"; // Green Glow
@@ -67,12 +67,9 @@ export default function StructuralGraph({
           (n) => n.node_name === item.predecessor
         );
 
-        const isLinkedEdge =
-          item.linked_nodes?.includes(item.predecessor) ||
-          predecessorNode?.linked_nodes?.includes(item.node_name);
-
         const isFormalismEdge =
-          isLinkedEdge && (item.is_formalism || predecessorNode?.is_formalism);
+          item.is_contextual_progress ||
+          predecessorNode?.is_contextual_progress;
 
         return {
           id: `e-${item.predecessor}-${item.node_name}`,
@@ -81,8 +78,7 @@ export default function StructuralGraph({
           animated: true,
           style: {
             stroke:
-              selectedNode === item.node_name ||
-              selectedNode === item.predecessor
+              selectedNode === item.node_name
                 ? "#ff8800"
                 : isFormalismEdge
                 ? "#33cc33"
@@ -106,8 +102,7 @@ export default function StructuralGraph({
             width: 10,
             height: 10,
             color:
-              selectedNode === item.node_name ||
-              selectedNode === item.predecessor
+              selectedNode === item.node_name
                 ? "#ff8800"
                 : isFormalismEdge
                 ? "#33cc33"

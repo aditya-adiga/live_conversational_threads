@@ -54,8 +54,8 @@ export default function ContextualGraph({
     const nodes = latestChunk.map((item) => {
       let background, border, boxShadow;
 
-      if (item.is_formalism) {
-        // Highest priority: Formalism
+      if (item.is_contextual_progress) {
+        // Highest priority: contextual progress
         background = "#ccffcc"; // Light Green
         border = "2px solid #33cc33"; // Green Border
         boxShadow = "0px 0px 10px rgba(51, 204, 51, 0.6)"; // Green Glow
@@ -99,7 +99,9 @@ export default function ContextualGraph({
           (relatedNodeData?.linked_nodes || []).includes(item.node_name); // Check if either node in the edge is in linked_nodes
 
         const isFormalismEdge =
-          isLinkedEdge && (item.is_formalism || relatedNodeData?.is_formalism); // Check if either node in the edge has is_formalism = true
+          isLinkedEdge &&
+          (item.is_contextual_progress ||
+            relatedNodeData?.is_contextual_progress); // Check if either node in the edge has is_contextual_progress = true
 
         return {
           id: `e-${relatedNode}-${item.node_name}`,
@@ -168,13 +170,13 @@ export default function ContextualGraph({
                 ? "bg-green-300 hover:bg-green-400"
                 : "bg-gray-300 cursor-not-allowed"
             }`}
-            onClick={() => toggleNodeProperty("is_formalism")}
+            onClick={() => toggleNodeProperty("is_contextual_progress")}
             disabled={!selectedNode}
           >
             {latestChunk.find((node) => node.node_name === selectedNode)
-              ?.is_formalism
-              ? "Unmark Formalism"
-              : "Mark Formalism"}
+              ?.is_contextual_progress
+              ? "Unmark contextual progress"
+              : "Mark contextual progress"}
           </button>
 
           {/* Bookmark Toggle */}

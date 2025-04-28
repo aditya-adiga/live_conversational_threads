@@ -54,8 +54,7 @@ conda activate lct_env
 pip install -r requirements.txt
 ```
 
-4. Set up environment variables:
-   Create a `.env` file in the root directory with:
+4. Set up below environment variable on your computer:
 
 ```
 ANTHROPIC_API_KEY=your_api_key_here

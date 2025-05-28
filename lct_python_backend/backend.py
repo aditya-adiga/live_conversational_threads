@@ -58,7 +58,7 @@ class generateFormalismResponse(BaseModel):
     formalism_data: List
 
 # Function to chunk the text
-def sliding_window_chunking(text: str, chunk_size: int = 2000, overlap: int = 400) -> Dict[str, str]:
+def sliding_window_chunking(text: str, chunk_size: int = 10000, overlap: int = 2000) -> Dict[str, str]:
     assert chunk_size > overlap, "chunk_size must be greater than overlap!"
 
     words = text.split()

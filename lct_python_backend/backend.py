@@ -31,7 +31,7 @@ SAVE_DIRECTORY = "../saved_json"
 lct_app = FastAPI()
 
 # Serve JS/CSS/assets from Vite build folder
-lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
+# lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
 
 
 
@@ -133,18 +133,25 @@ def claude_llm_call(transcript: str, claude_prompt: str, start_text: str, temp: 
             )
             return message.content[0].text
             
+        except json.JSONDecodeError as e:
+            print(f"Invalid JSON: {e}")
+            return None
+
         except anthropic.AuthenticationError:
             print("Authentication failed. Check your API key.")
-            break  # Auth errors are not recoverable
+            return None
+
         except anthropic.RateLimitError:
-            print("Rate limit exceeded. Retrying...")
+            print("Rate limit exceeded. Retrying...")  # ✅ Retryable
+
         except anthropic.APIError as e:
             print(f"API error occurred: {e}")
             if "overloaded" not in str(e).lower():
-                break  # Only retry if it's overload-related
+                return None
+
         except Exception as e:
             print(f"Unexpected error: {e}")
-            break
+            return None
 
         # Exponential backoff before next retry
         sleep_time = backoff_base ** attempt + random.uniform(0, 1)
@@ -192,19 +199,24 @@ def generate_lct_json_claude(transcript: str, temp: float = 0.6, retries: int = 
             
 
         except json.JSONDecodeError as e:
-            print(f"Invalid JSON: {e}")     
+            print(f"Invalid JSON: {e}")
+            return None
+
         except anthropic.AuthenticationError:
             print("Authentication failed. Check your API key.")
-            break  # Auth errors are not recoverable
+            return None
+
         except anthropic.RateLimitError:
-            print("Rate limit exceeded. Retrying...")
+            print("Rate limit exceeded. Retrying...")  # Retryable
+
         except anthropic.APIError as e:
             print(f"API error occurred: {e}")
             if "overloaded" not in str(e).lower():
-                break  # Only retry if it's overload-related
+                return None
+
         except Exception as e:
             print(f"Unexpected error: {e}")
-            break
+            return None
 
 def generate_lct_json_gemini(
     transcript: str,
@@ -241,24 +253,17 @@ def generate_lct_json_gemini(
                 if hasattr(chunk, "text"):
                     full_response += chunk.text
 
-            # print(full_response)
             return json.loads(full_response)
 
         except json.JSONDecodeError as e:
             print(f"[Attempt {attempt+1}] JSON decoding failed: {e}")
-        # except genai.types.ApiKeyError:
-        #     print("Authentication failed. Check your GOOGLEAI_API_KEY.")
-        #     break
-        # except genai.types.RateLimitError:
-        #     print(f"[Attempt {attempt+1}] Rate limit hit. Retrying...")
-        # except genai.types.APIError as e:
-        #     print(f"[Attempt {attempt+1}] API error: {e}")
-        #     if "overloaded" not in str(e).lower():
-        #         break
+            print("failed json :",full_response)
+
         except Exception as e:
             print(f"[Attempt {attempt+1}] Unexpected error: {e}")
-            break
+            return None 
 
+        # Exponential backoff before retrying
         time.sleep(backoff_base ** attempt)
 
     return None
@@ -340,18 +345,10 @@ Evaluation Notes:
 
         except json.JSONDecodeError as e:
             print(f"[Attempt {attempt+1}] JSON decoding failed: {e}")
-        # except genai.types.ApiKeyError:
-        #     print("Authentication failed. Check GOOGLEAI_API_KEY.")
-        #     break
-        # except genai.types.RateLimitError:
-        #     print(f"[Attempt {attempt+1}] Rate limit hit. Retrying after backoff...")
-        # except genai.types.APIError as e:
-        #     print(f"[Attempt {attempt+1}] API error: {e}")
-        #     if "overloaded" not in str(e).lower():
-        #         break
+
         except Exception as e:
             print(f"[Attempt {attempt+1}] Unexpected error: {e}")
-            break
+            return None 
 
         # Exponential backoff before retrying
         time.sleep(backoff_base ** attempt)
@@ -432,19 +429,24 @@ def generate_individual_formalism(formalism_input: str, temp: float = 0.7, retri
             
 
         except json.JSONDecodeError as e:
-            print(f"Invalid JSON: {e}")     
+            print(f"Invalid JSON: {e}")
+            return None
+
         except anthropic.AuthenticationError:
             print("Authentication failed. Check your API key.")
-            break  # Auth errors are not recoverable
+            return None
+
         except anthropic.RateLimitError:
-            print("Rate limit exceeded. Retrying...")
+            print("Rate limit exceeded. Retrying...")  # Retryable
+
         except anthropic.APIError as e:
             print(f"API error occurred: {e}")
             if "overloaded" not in str(e).lower():
-                break  # Only retry if it's overload-related
+                return None
+
         except Exception as e:
             print(f"Unexpected error: {e}")
-            break
+            return None
 
         # Exponential backoff before next retry
         sleep_time = backoff_base ** attempt + random.uniform(0, 1)
@@ -760,6 +762,10 @@ async def websocket_audio_endpoint(websocket: WebSocket):
                                                     shared_state["accumulator"].clear()
                                                 except Exception as e:
                                                     print(f"Error during final flush: {e}")
+                                                    await websocket.send_text(json.dumps({
+                                                        "type": "error",
+                                                        "detail": f"Flush failed: {str(e)}"
+                                                    }))
 
                                             await websocket.send_text(json.dumps({ "type": "flush_ack" }))
                                             print("Flush ack sent, sleeping briefly...")
@@ -776,7 +782,7 @@ async def websocket_audio_endpoint(websocket: WebSocket):
                             
                             except Exception as e:
                                 print(f"Error receiving from client: {e}")
-                                break
+                                raise
                         
                     async def receive_from_assemblyai():
                         batch_size = BATCH_SIZE
@@ -826,15 +832,19 @@ async def websocket_audio_endpoint(websocket: WebSocket):
                                             continue_accumulating = True  # Restart accumulation
 
                                 elif msg_type == "error":
-                                    print("AssemblyAI error:", msg.get("error"))
-                                    break
-
+                                    error_msg = msg.get("error", "Unknown error")
+                                    print("AssemblyAI error:", error_msg)
+                                    await websocket.send_text(json.dumps({
+                                        "type": "error",
+                                        "detail": f"AssemblyAI error: {error_msg}"
+                                    }))
+                                    return 
                             # except ConnectionClosedError:
                             #     print("AssemblyAI WebSocket closed.")
                             #     break
                             except Exception as e:
                                 print(f"Error receiving from AssemblyAI: {e}")
-                                break
+                                raise
 
                     tasks = [
                         asyncio.create_task(receive_from_client()),

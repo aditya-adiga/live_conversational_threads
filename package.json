@@ -1,5 +1,10 @@
 {
-  "dependencies": {
-    "dagre": "^0.8.5"
+  "name": "live-conversational-threads",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm --prefix lct_app run dev\" \"uvicorn lct_python_backend.backend:lct_app --reload --host 0.0.0.0 --port 8080\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.0.0"
   }
 }

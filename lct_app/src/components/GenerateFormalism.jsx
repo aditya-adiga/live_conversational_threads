@@ -27,8 +27,9 @@ export default function GenerateFormalism({
     setIsLoading(true);
 
     try {
+      const API_URL = import.meta.env.VITE_API_URL || "";
       const response = await fetch(
-        "http://localhost:8000/generate_formalism/",
+        `${API_URL}/generate_formalism/`,
         {
           method: "POST",
           headers: {

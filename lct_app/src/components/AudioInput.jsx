@@ -8,23 +8,79 @@ export default function AudioInput({ onDataReceived, onChunksReceived }) {
   const processorRef = useRef(null);
   const sourceRef = useRef(null);
 
-  const handleFatalError = () => {
+  const pingIntervalRef = useRef(null);
+
+  const logToServer = (message) => { //logging
+    console.log("[Client Log]", message);
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "client_log", message }));
+    }
+  };
+
+  const handleFatalError = async () => {
     setRecording(false);
   
     try {
       processorRef.current?.disconnect();
       sourceRef.current?.disconnect();
-      audioContextRef.current?.close();
-      wsRef.current?.close();
+  
+      // Close AudioContext only if it's still open
+      if (
+        audioContextRef.current &&
+        audioContextRef.current.state !== "closed"
+      ) {
+        await audioContextRef.current.close();
+      }
+  
+      // Close WebSocket only if it's still open
+      if (
+        wsRef.current &&
+        wsRef.current.readyState === WebSocket.OPEN
+      ) {
+        wsRef.current.close();
+      }
     } catch (e) {
       console.warn("Error during cleanup:", e);
     }
   
-    wsRef.current = null;
-    audioContextRef.current = null;
+    // 🧹 Always clear the refs
     processorRef.current = null;
     sourceRef.current = null;
+    audioContextRef.current = null;
+    wsRef.current = null;
   };
+
+  function downsampleBuffer(buffer, inputSampleRate, outputSampleRate = 16000) { // downsampling higher audio frequency
+    if (inputSampleRate < outputSampleRate) {
+      throw new Error(`Input sample rate (${inputSampleRate}) is below the required minimum of ${outputSampleRate} Hz`);
+    }
+  
+    if (inputSampleRate === outputSampleRate) return buffer;
+  
+    const sampleRateRatio = inputSampleRate / outputSampleRate;
+    const newLength = Math.round(buffer.length / sampleRateRatio);
+    const result = new Float32Array(newLength);
+  
+    let offsetResult = 0;
+    let offsetBuffer = 0;
+  
+    while (offsetResult < result.length) {
+      const nextOffsetBuffer = Math.round((offsetResult + 1) * sampleRateRatio);
+      let accum = 0;
+      let count = 0;
+  
+      for (let i = offsetBuffer; i < nextOffsetBuffer && i < buffer.length; i++) {
+        accum += buffer[i];
+        count++;
+      }
+  
+      result[offsetResult] = accum / count;
+      offsetResult++;
+      offsetBuffer = nextOffsetBuffer;
+    }
+  
+    return result;
+  }
 
   const startRecording = async () => {
     // Open microphone
@@ -35,7 +91,7 @@ export default function AudioInput({ onDataReceived, onChunksReceived }) {
     sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
 
     // Create a ScriptProcessorNode to access audio buffers
-    processorRef.current = audioContextRef.current.createScriptProcessor(4096, 1, 1);
+    processorRef.current = audioContextRef.current.createScriptProcessor(8192, 1, 1);
 
     // Setup WebSocket connection
     const API_BASE = import.meta.env.VITE_API_URL || window.location.origin;
@@ -46,6 +102,16 @@ export default function AudioInput({ onDataReceived, onChunksReceived }) {
 
     ws.onopen = () => {
       setRecording(true);
+      logToServer(`AudioContext requested at 16000Hz, actual: ${audioContextRef.current.sampleRate}Hz`); // logging
+
+      // Start ping interval
+  pingIntervalRef.current = setInterval(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "ping" }));
+    }
+  }, 5000); // every 5 seconds
+
+
       sourceRef.current.connect(processorRef.current);
       processorRef.current.connect(audioContextRef.current.destination);
     };
@@ -74,27 +140,46 @@ export default function AudioInput({ onDataReceived, onChunksReceived }) {
 
     ws.onerror = (err) => {
       console.error("WebSocket error:", err);
-      handleFatalError();
+      logToServer(`WebSocket error: code=${err.code}, reason=${err.reason}`);
+      // handleFatalError();
     };
     
     ws.onclose = (e) => {
-      console.warn("WebSocket closed unexpectedly:", e);
+      logToServer(`WebSocket closed: code=${e.code}, reason=${e.reason}`);
+
+      // Clear ping interval
+      if (pingIntervalRef.current) {
+        clearInterval(pingIntervalRef.current);
+        pingIntervalRef.current = null;
+      }
+
       handleFatalError();
     };
     // Process raw audio data and send as 16-bit PCM
+    // Process microphone input
     processorRef.current.onaudioprocess = (e) => {
-      if (ws.readyState !== WebSocket.OPEN) return;
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
 
-      const inputBuffer = e.inputBuffer.getChannelData(0);
-      const pcmData = new Int16Array(inputBuffer.length);
+      try {
+        const inputSampleRate = audioContextRef.current.sampleRate;
+        if (inputSampleRate < 16000) {
+          throw new Error(`Unsupported sample rate: ${inputSampleRate} Hz`);
+        }
 
-      // Convert Float32 [-1,1] to Int16 PCM
-      for (let i = 0; i < inputBuffer.length; i++) {
-        let s = Math.max(-1, Math.min(1, inputBuffer[i]));
-        pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        const inputBuffer = e.inputBuffer.getChannelData(0);
+        const resampled = downsampleBuffer(inputBuffer, inputSampleRate, 16000);
+
+        const pcmData = new Int16Array(resampled.length);
+        for (let i = 0; i < resampled.length; i++) {
+          let s = Math.max(-1, Math.min(1, resampled[i]));
+          pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+
+        ws.send(pcmData.buffer);
+      } catch (err) {
+        console.error("Error during audio processing:", err);
+        logToServer(`Audio processing error: ${err.message}`);
       }
-
-      ws.send(pcmData.buffer);
     };
   };
 

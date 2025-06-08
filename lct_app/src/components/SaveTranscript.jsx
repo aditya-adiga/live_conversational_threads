@@ -36,9 +36,9 @@ export default function SaveJson({ chunkDict}) {
                   }`}
         onClick={handleSave}
         disabled={isSaveDisabled}
-        title={isSaveDisabled ? "No data to save" : "Export combined text"}
+        title={isSaveDisabled ? "No data to save" : "Export transcript"}
       >
-        Save Transcript
+        Download Transcript
       </button>
     </div>
   );

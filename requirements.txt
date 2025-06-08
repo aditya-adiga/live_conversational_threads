@@ -4,3 +4,4 @@ websockets==15.0.1
 anthropic==0.52.1
 pydantic==2.11.5
 google-genai==1.17.0
+google-cloud-storage==3.1.0

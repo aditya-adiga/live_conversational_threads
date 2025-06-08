@@ -1,7 +1,9 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Mic } from "lucide-react";
 
-export default function AudioInput({ onDataReceived, onChunksReceived }) {
+import { saveConversationToServer } from "../utils/saveConversation";
+
+export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict, graphData, conversationId, setMessage, message }) {
   const [recording, setRecording] = useState(false);
   const wsRef = useRef(null);
   const audioContextRef = useRef(null);
@@ -9,6 +11,14 @@ export default function AudioInput({ onDataReceived, onChunksReceived }) {
   const sourceRef = useRef(null);
 
   const pingIntervalRef = useRef(null);
+
+  useEffect(() => {
+      if (!message) return;
+    
+      const handleClick = () => setMessage("");
+      window.addEventListener("click", handleClick);
+      return () => window.removeEventListener("click", handleClick);
+    }, [message, setMessage]);
 
   const logToServer = (message) => { //logging
     console.log("[Client Log]", message);
@@ -232,6 +242,30 @@ export default function AudioInput({ onDataReceived, onChunksReceived }) {
         }
       };
   
+      // ✅ Save after everything is closed and flushed
+      if (graphData && chunkDict) {
+        setTimeout(async () => {
+          const fileName = prompt("Enter a name for your conversation file:");
+          if (!fileName) {
+            setMessage?.("Save canceled. No file name provided.");
+            return resolve();
+          }
+
+          const result = await saveConversationToServer({
+            fileName,
+            graphData: graphData,
+            chunkDict: chunkDict,
+            conversationId,
+          });
+
+          setMessage?.(result.message || "Conversation saved.");
+          resolve();
+        }, 100); // slight delay to ensure UI updates
+      } else {
+        setMessage?.("Recording ended, but no data was received.");
+        resolve();
+      }
+
       wsRef.current.onmessage = handleMessage;
     });
   };

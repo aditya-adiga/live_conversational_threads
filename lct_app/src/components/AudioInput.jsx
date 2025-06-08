@@ -43,7 +43,7 @@ export default function AudioInput({ onDataReceived, onChunksReceived }) {
       console.warn("Error during cleanup:", e);
     }
   
-    // 🧹 Always clear the refs
+    // clear the refs
     processorRef.current = null;
     sourceRef.current = null;
     audioContextRef.current = null;
@@ -86,6 +86,22 @@ export default function AudioInput({ onDataReceived, onChunksReceived }) {
     // Open microphone
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
+    const audioTrack = stream.getAudioTracks()[0];
+    console.log("[CLIENT] Mic track state:", audioTrack.readyState); // 'live' or 'ended'
+
+    audioTrack.onended = () => {
+      console.warn("[CLIENT] Microphone track ended unexpectedly");
+    };
+
+    // Optional: Poll mic
+    const micStatusInterval = setInterval(() => {
+      console.log("[CLIENT] Mic readyState (poll):", audioTrack.readyState);
+      if (audioTrack.readyState !== "live") {
+        console.log("Mic track state changed to: " + audioTrack.readyState);
+        clearInterval(micStatusInterval); // stop polling if ended
+      }
+    }, 5000);
+
     // Create AudioContext with 16kHz sample rate (AssemblyAI expects 16kHz PCM)
     audioContextRef.current = new AudioContext({ sampleRate: 16000 });
     sourceRef.current = audioContextRef.current.createMediaStreamSource(stream);
@@ -104,12 +120,12 @@ export default function AudioInput({ onDataReceived, onChunksReceived }) {
       setRecording(true);
       logToServer(`AudioContext requested at 16000Hz, actual: ${audioContextRef.current.sampleRate}Hz`); // logging
 
-      // Start ping interval
-  pingIntervalRef.current = setInterval(() => {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "ping" }));
-    }
-  }, 5000); // every 5 seconds
+  //     // Start ping interval
+  // pingIntervalRef.current = setInterval(() => {
+  //   if (ws.readyState === WebSocket.OPEN) {
+  //     ws.send(JSON.stringify({ type: "ping" }));
+  //   }
+  // }, 5000); // every 5 seconds
 
 
       sourceRef.current.connect(processorRef.current);
@@ -152,7 +168,7 @@ export default function AudioInput({ onDataReceived, onChunksReceived }) {
         clearInterval(pingIntervalRef.current);
         pingIntervalRef.current = null;
       }
-
+    
       handleFatalError();
     };
     // Process raw audio data and send as 16-bit PCM

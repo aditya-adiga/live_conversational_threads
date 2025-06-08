@@ -158,75 +158,74 @@ export default function ContextualGraph({
       className={`flex flex-col bg-white shadow-lg rounded-lg p-4 transition-all duration-300 ${
         isFullScreen
           ? "absolute top-0 left-0 w-full h-full z-50"
-          : "w-full h-[calc(100%-40px)]"
+          : "w-full h-full" // [calc(100%-40px)]"
       }`}
     >
-      <div className="flex justify-between items-center mb-2">
-        <div className="flex space-x-2">
-          {/* Formalism Toggle */}
-          <button
-            className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
-              selectedNode
-                ? "bg-green-300 hover:bg-green-400"
-                : "bg-gray-300 cursor-not-allowed"
-            }`}
-            onClick={() => toggleNodeProperty("is_contextual_progress")}
-            disabled={!selectedNode}
-          >
-            {latestChunk.find((node) => node.node_name === selectedNode)
-              ?.is_contextual_progress
-              ? "Unmark contextual progress"
-              : "Mark contextual progress"}
-          </button>
+      <div className="relative grid grid-cols-3 items-center justify-between mb-2">
+      {/* Left Actions */}
+      <div className="flex space-x-2 justify-start">
+        <button
+          className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
+            selectedNode
+              ? "bg-green-300 hover:bg-green-400"
+              : "bg-gray-300 cursor-not-allowed"
+          }`}
+          onClick={() => toggleNodeProperty("is_contextual_progress")}
+          disabled={!selectedNode}
+        >
+          {latestChunk.find((node) => node.node_name === selectedNode)
+            ?.is_contextual_progress
+            ? "Unmark contextual progress"
+            : "Mark contextual progress"}
+        </button>
 
-          {/* Bookmark Toggle */}
-          <button
-            className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
-              selectedNode
-                ? "bg-blue-300 hover:bg-blue-400"
-                : "bg-gray-300 cursor-not-allowed"
-            }`}
-            onClick={() => toggleNodeProperty("is_bookmark")}
-            disabled={!selectedNode}
-          >
-            {latestChunk.find((node) => node.node_name === selectedNode)
-              ?.is_bookmark
-              ? "Remove Bookmark"
-              : "Create Bookmark"}
-          </button>
-        </div>
-
-        <h2 className="text-lg font-semibold text-center flex-grow">
-          Contextual Flow
-        </h2>
-
-        <div className="flex space-x-2">
-          {/* Show Context Button */}
-          <button
-            className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
-              latestChunk.length > 0 && selectedNode
-                ? "bg-yellow-300 hover:bg-yellow-400"
-                : "bg-gray-300 cursor-not-allowed"
-            }`}
-            onClick={() =>
-              latestChunk.length > 0 &&
-              selectedNode &&
-              setShowContext(!showContext)
-            }
-            disabled={latestChunk.length === 0 || !selectedNode}
-          >
-            {showContext ? "Hide context" : "What's the context?"}
-          </button>
-
-          {/* Fullscreen Toggle Button */}
-          <button
-            className="px-4 py-2 bg-blue-100 text-white rounded-lg shadow-md hover:bg-blue-200 active:scale-95 transition"
-            onClick={() => setIsFullScreen(!isFullScreen)}
-          >
-            {isFullScreen ? "❌" : "🔎"}
-          </button>
-        </div>
+        <button
+          className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
+            selectedNode
+              ? "bg-blue-300 hover:bg-blue-400"
+              : "bg-gray-300 cursor-not-allowed"
+          }`}
+          onClick={() => toggleNodeProperty("is_bookmark")}
+          disabled={!selectedNode}
+        >
+          {latestChunk.find((node) => node.node_name === selectedNode)
+            ?.is_bookmark
+            ? "Remove Bookmark"
+            : "Create Bookmark"}
+        </button>
       </div>
+
+      {/* Center Title */}
+      <h2 className="text-xl font-bold text-gray-800 text-center">
+        Thematic Flow of Conversation
+      </h2>
+
+      {/* Right Actions */}
+      <div className="flex space-x-2 justify-end">
+        <button
+          className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
+            latestChunk.length > 0 && selectedNode
+              ? "bg-yellow-300 hover:bg-yellow-400"
+              : "bg-gray-300 cursor-not-allowed"
+          }`}
+          onClick={() =>
+            latestChunk.length > 0 &&
+            selectedNode &&
+            setShowContext(!showContext)
+          }
+          disabled={latestChunk.length === 0 || !selectedNode}
+        >
+          {showContext ? "Hide context" : "What's the context?"}
+        </button>
+
+        <button
+          className="px-4 py-2 bg-blue-100 text-white rounded-lg shadow-md hover:bg-blue-200 active:scale-95 transition"
+          onClick={() => setIsFullScreen(!isFullScreen)}
+        >
+          {isFullScreen ? "❌" : "🔎"}
+        </button>
+      </div>
+    </div>
 
       {/* Context Card */}
       {showContext && selectedNode && (

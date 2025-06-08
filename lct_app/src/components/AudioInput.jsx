@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Mic } from "lucide-react";
 
-import { saveConversationToServer } from "../utils/saveConversation";
+import { saveConversationToServer } from "../utils/SaveConversation";
 
 export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict, graphData, conversationId, setMessage, message }) {
   const [recording, setRecording] = useState(false);

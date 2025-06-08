@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { saveConversationToServer } from "../utils/saveConversation";
+import { saveConversationToServer } from "../utils/SaveConversation";
 
 export default function SaveJson({ chunkDict, graphData, conversationId, setMessage, message }) {
   

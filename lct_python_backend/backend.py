@@ -795,225 +795,245 @@ async def generate_formalism_call(request: generateFormalismRequest):
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
     
 @lct_app.websocket("/ws/audio")
-async def websocket_audio_endpoint(websocket: WebSocket):
-    try:
-        await websocket.accept()
+async def websocket_audio_endpoint(client_websocket: WebSocket):
 
+    shared_state = {
+                    "accumulator": [],
+                    "existing_json": [],
+                    "chunk_dict": {},
+                }
+    
+    async def should_continue_processing(text_batch, stop_accumulating_flag= False):
+        # Replace with your actual decision logic or API call
+        input_text = ' '.join(text_batch)
+        # contextually complete chunk
+        accumulated_output = genai_accumulate_text_json(input_text)
+        if not accumulated_output:
+            print("[INFO]: Failed to accumulate; defaulting to continue accumulating.")
+            return True, ' '.join(text_batch)  # return as if still incomplete
+
+        if not stop_accumulating_flag:
+            segmented_input_chunk = accumulated_output.get('Completed_segment', '')
+            incomplete_seg = accumulated_output.get('Incomplete_segment', '')
+
+        # print(f'accumulated output: {accumulated_output}')
+            
+        decision_flag = accumulated_output.get("decision", "continue_accumulating")
+        if decision_flag == 'continue_accumulating':
+            decision = True
+        elif decision_flag == 'stop_accumulating':
+            decision = False
+        else:
+            print(f"[INFO]: Unexpected decision_flag: {decision_flag}")
+            decision = True
+            
+        if stop_accumulating_flag:
+            decision = False
+            segmented_input_chunk = ' '.join(text_batch)
+            incomplete_seg= ''
+        
+        print(f"[INFO]: segmented input: {segmented_input_chunk}")
+        print(f"[INFO]: detected threads: {accumulated_output['detected_threads']}")
+        
+        #sending graph stuff to front end
+        if segmented_input_chunk.strip():
+            mod_input = f'Existing JSON : \n {repr(shared_state["existing_json"])} \n\n Transcript Input: \n {segmented_input_chunk}'
+            output_json = generate_lct_json_gemini(mod_input)
+            # output_json = generate_lct_json_claude(mod_input)
+
+            if output_json:
+                chunk_id = str(uuid.uuid4())
+                shared_state["chunk_dict"][chunk_id] = segmented_input_chunk
+                for item in output_json:
+                    item["chunk_id"] = chunk_id
+
+                shared_state["existing_json"].extend(output_json)
+
+                # 🔁 Send it to frontend live
+                await client_websocket.send_text(json.dumps({
+                    "type": "existing_json",
+                    "data": [shared_state["existing_json"]]
+                }))
+                print("[CLIENT WS] Sent message to client: type=existing_json")
+                
+                await asyncio.sleep(0.02)  # 20ms pause
+                
+                await client_websocket.send_text(json.dumps({
+                    "type": "chunk_dict",
+                    "data": shared_state["chunk_dict"]
+                }))
+                print("[CLIENT WS] Sent message to client: type=chunk_dict")
+
+        print(f"[INFO]: Evaluated batch of {len(text_batch)} transcripts...")
+        return decision, incomplete_seg
+        
+    async def receive_from_client(client_websocket, aai_ws, shared_state):
+        while True:
+            try:
+                message = await client_websocket.receive()
+
+                if "bytes" in message:
+                    print("[CLIENT WS] Receiving audio...")
+                    # This is binary audio data
+                    print("[AAI WS] Sending audio to AssemblyAI...")
+                    pcm_data = message["bytes"]
+                    await aai_ws.send(pcm_data)
+
+                elif "text" in message:
+                    print("[CLIENT WS] Received control message:", message["text"])
+                    # This is a JSON control message
+                    try:
+                        msg = json.loads(message["text"])
+                        
+                        #client log
+                        if msg.get("type") == "client_log":
+                            print(f"[INFO]: [Client Log] {msg['message']}")
+                            
+                        # if msg.get("type") == "ping":
+                        #     print("recieved ping")
+                            # return 
+        
+                        # final flush
+                        if msg.get("final_flush"):
+                            print("[INFO]: Final flush requested by client.")
+                            if shared_state["accumulator"]:
+                                try:
+                                    await should_continue_processing(shared_state["accumulator"], stop_accumulating_flag=True)
+                                    shared_state["accumulator"].clear()
+                                except Exception as e:
+                                    print(f"[INFO]: Error during final flush: {e}")
+                                    await client_websocket.send_text(json.dumps({
+                                        "type": "error",
+                                        "detail": f"Flush failed: {str(e)}"
+                                    }))
+
+                            await client_websocket.send_text(json.dumps({ "type": "flush_ack" }))
+                            print("[INFO]: Flush ack sent, sleeping briefly...")
+                            await asyncio.sleep(0.5)
+                            print("[INFO]: Closing websocket now.")
+                            await client_websocket.close(code=1000)
+                            return
+                    except Exception as e:
+                        print(f"[INFO]: Invalid JSON message from client: {e}")
+
+            except WebSocketDisconnect:
+                print("[INFO]: WebSocket client disconnected.")
+                break
+            
+            except Exception as e:
+                print(f"[INFO]: Error receiving from client: {e}")
+                raise
+        
+    async def receive_from_assemblyai(aai_ws, client_websocket, shared_state):
+        batch_size = BATCH_SIZE
+        continue_accumulating = True
+        while True:
+            try:
+                msg = await aai_ws.recv()
+                msg = json.loads(msg)
+                msg_type = msg.get("message_type")
+
+                if msg_type == "SessionBegins":
+                    print("[INFO]: AssemblyAI session started:", msg.get("session_id"))
+
+                # elif msg_type == "PartialTranscript":
+                #     print(msg.get("text", ""), end="\r")
+
+                elif msg_type == "FinalTranscript":
+                    final_text = msg.get("text", "")
+                    # print(final_text)
+
+                    if final_text:
+                        shared_state['accumulator'].append(final_text)
+
+                    if len(shared_state['accumulator']) >= batch_size and continue_accumulating:
+                        # Evaluate current batch
+                        continue_accumulating, incomplete_seg = await should_continue_processing(shared_state['accumulator'])
+
+                        if continue_accumulating:
+                            if batch_size >= MAX_BATCH_SIZE:
+                                print("[INFO]: Batch size limit reached. Forcing segmentation.")
+                                continue_accumulating, incomplete_seg = await should_continue_processing(shared_state['accumulator'], stop_accumulating_flag=True)
+                                
+                                shared_state['accumulator'] = [] # Reset accumulator
+                                batch_size = BATCH_SIZE  # Reset batch size
+                                continue_accumulating = True  # Restart accumulation
+                                # print(f"shared_state accumulator  {shared_state['accumulator']}")
+                            else:
+                                batch_size += BATCH_SIZE 
+                        else:
+                            # Send batch and reset
+                            # print(f"Batch sent and accumulator reset: {shared_state['accumulator']}")
+                            if incomplete_seg:
+                                shared_state['accumulator'] = [incomplete_seg]
+                            else:
+                                shared_state['accumulator'] = []
+                            batch_size = BATCH_SIZE  # Reset batch size
+                            continue_accumulating = True  # Restart accumulation
+
+                elif msg_type == "error":
+                    error_msg = msg.get("error", "Unknown error")
+                    print("[INFO]: AssemblyAI error:", error_msg)
+                    await client_websocket.send_text(json.dumps({
+                        "type": "error",
+                        "detail": f"AssemblyAI error: {error_msg}"
+                    }))
+                    return 
+            # except ConnectionClosedError:
+            #     print("AssemblyAI WebSocket closed.")
+            #     break
+            except Exception as e:
+                print(f"[INFO]: Error receiving from AssemblyAI: {e}")
+                raise
+
+
+    try:
+        await client_websocket.accept()
+        print("[CLIENT WS] WebSocket connection accepted")
+        
         for attempt in range(3):
+            print(f"[AAI WS] Attempt {attempt + 1}/3: Connecting to AssemblyAI...")
             try:
                 async with websockets.connect(
                     ASSEMBLYAI_WS_URL,
                     additional_headers={"Authorization": ASSEMBLYAI_API_KEY}
                 ) as aai_ws:
-                    print("[INFO]: Connected to AssemblyAI")
-
-                    shared_state = {
-                        "accumulator": [],
-                        "existing_json": [],
-                        "chunk_dict": {},
-                    }
+                    print("[AAI WS] Connected to AssemblyAI")
                     
-                    async def should_continue_processing(text_batch, stop_accumulating_flag= False):
-                            # Replace with your actual decision logic or API call
-                            input_text = ' '.join(text_batch)
-                            # contextually complete chunk
-                            accumulated_output = genai_accumulate_text_json(input_text)
-                            if not accumulated_output:
-                                print("[INFO]: Failed to accumulate; defaulting to continue accumulating.")
-                                return True, ' '.join(text_batch)  # return as if still incomplete
-
-                            if not stop_accumulating_flag:
-                                segmented_input_chunk = accumulated_output.get('Completed_segment', '')
-                                incomplete_seg = accumulated_output.get('Incomplete_segment', '')
-
-                            # print(f'accumulated output: {accumulated_output}')
-                                
-                            decision_flag = accumulated_output.get("decision", "continue_accumulating")
-                            if decision_flag == 'continue_accumulating':
-                                decision = True
-                            elif decision_flag == 'stop_accumulating':
-                                decision = False
-                            else:
-                                print(f"[INFO]: Unexpected decision_flag: {decision_flag}")
-                                decision = True
-                                
-                            if stop_accumulating_flag:
-                                decision = False
-                                segmented_input_chunk = ' '.join(text_batch)
-                                incomplete_seg= ''
-                            
-                            print(f"[INFO]: segmented input: {segmented_input_chunk}")
-                            print(f"[INFO]: detected threads: {accumulated_output['detected_threads']}")
-                            
-                            #sending graph stuff to front end
-                            if segmented_input_chunk.strip():
-                                mod_input = f'Existing JSON : \n {repr(shared_state["existing_json"])} \n\n Transcript Input: \n {segmented_input_chunk}'
-                                output_json = generate_lct_json_gemini(mod_input)
-                                # output_json = generate_lct_json_claude(mod_input)
-
-                                if output_json:
-                                    chunk_id = str(uuid.uuid4())
-                                    shared_state["chunk_dict"][chunk_id] = segmented_input_chunk
-                                    for item in output_json:
-                                        item["chunk_id"] = chunk_id
-
-                                    shared_state["existing_json"].extend(output_json)
-
-                                    # 🔁 Send it to frontend live
-                                    await websocket.send_text(json.dumps({
-                                        "type": "existing_json",
-                                        "data": [shared_state["existing_json"]]
-                                    }))
-                                    
-                                    await asyncio.sleep(0.02)  # 20ms pause
-                                    
-                                    await websocket.send_text(json.dumps({
-                                        "type": "chunk_dict",
-                                        "data": shared_state["chunk_dict"]
-                                    }))
-
-                            print(f"[INFO]: Evaluated batch of {len(text_batch)} transcripts...")
-                            return decision, incomplete_seg
-                        
-                    async def receive_from_client():
-                        while True:
-                            try:
-                                message = await websocket.receive()
-
-                                if "bytes" in message:
-                                    # This is binary audio data
-                                    pcm_data = message["bytes"]
-                                    await aai_ws.send(pcm_data)
-
-                                elif "text" in message:
-                                    # This is a JSON control message
-                                    try:
-                                        msg = json.loads(message["text"])
-                                        
-                                        #client log
-                                        if msg.get("type") == "client_log":
-                                            print(f"[INFO]: [Client Log] {msg['message']}")
-                                            
-                                        if msg.get("type") == "ping":
-                                            print("recieved ping")
-                                            # return 
-                        
-                                        # final flush
-                                        if msg.get("final_flush"):
-                                            print("[INFO]: Final flush requested by client.")
-                                            if shared_state["accumulator"]:
-                                                try:
-                                                    await should_continue_processing(shared_state["accumulator"], stop_accumulating_flag=True)
-                                                    shared_state["accumulator"].clear()
-                                                except Exception as e:
-                                                    print(f"[INFO]: Error during final flush: {e}")
-                                                    await websocket.send_text(json.dumps({
-                                                        "type": "error",
-                                                        "detail": f"Flush failed: {str(e)}"
-                                                    }))
-
-                                            await websocket.send_text(json.dumps({ "type": "flush_ack" }))
-                                            print("[INFO]: Flush ack sent, sleeping briefly...")
-                                            await asyncio.sleep(0.5)
-                                            print("[INFO]: Closing websocket now.")
-                                            await websocket.close(code=1000)
-                                            return
-                                    except Exception as e:
-                                        print(f"[INFO]: Invalid JSON message from client: {e}")
-
-                            except WebSocketDisconnect:
-                                print("[INFO]: WebSocket client disconnected.")
-                                break
-                            
-                            except Exception as e:
-                                print(f"[INFO]: Error receiving from client: {e}")
-                                raise
-                        
-                    async def receive_from_assemblyai():
-                        batch_size = BATCH_SIZE
-                        continue_accumulating = True
-                        while True:
-                            try:
-                                msg = await aai_ws.recv()
-                                msg = json.loads(msg)
-                                msg_type = msg.get("message_type")
-
-                                if msg_type == "SessionBegins":
-                                    print("[INFO]: AssemblyAI session started:", msg.get("session_id"))
-
-                                elif msg_type == "PartialTranscript":
-                                    print(msg.get("text", ""), end="\r")
-
-                                elif msg_type == "FinalTranscript":
-                                    final_text = msg.get("text", "")
-                                    print(final_text)
-
-                                    if final_text:
-                                        shared_state['accumulator'].append(final_text)
-
-                                    if len(shared_state['accumulator']) >= batch_size and continue_accumulating:
-                                        # Evaluate current batch
-                                        continue_accumulating, incomplete_seg = await should_continue_processing(shared_state['accumulator'])
-
-                                        if continue_accumulating:
-                                            if batch_size >= MAX_BATCH_SIZE:
-                                                print("[INFO]: Batch size limit reached. Forcing segmentation.")
-                                                continue_accumulating, incomplete_seg = await should_continue_processing(shared_state['accumulator'], stop_accumulating_flag=True)
-                                                
-                                                shared_state['accumulator'] = [] # Reset accumulator
-                                                batch_size = BATCH_SIZE  # Reset batch size
-                                                continue_accumulating = True  # Restart accumulation
-                                                # print(f"shared_state accumulator  {shared_state['accumulator']}")
-                                            else:
-                                                batch_size += BATCH_SIZE 
-                                        else:
-                                            # Send batch and reset
-                                            # print(f"Batch sent and accumulator reset: {shared_state['accumulator']}")
-                                            if incomplete_seg:
-                                                shared_state['accumulator'] = [incomplete_seg]
-                                            else:
-                                                shared_state['accumulator'] = []
-                                            batch_size = BATCH_SIZE  # Reset batch size
-                                            continue_accumulating = True  # Restart accumulation
-
-                                elif msg_type == "error":
-                                    error_msg = msg.get("error", "Unknown error")
-                                    print("[INFO]: AssemblyAI error:", error_msg)
-                                    await websocket.send_text(json.dumps({
-                                        "type": "error",
-                                        "detail": f"AssemblyAI error: {error_msg}"
-                                    }))
-                                    return 
-                            # except ConnectionClosedError:
-                            #     print("AssemblyAI WebSocket closed.")
-                            #     break
-                            except Exception as e:
-                                print(f"[INFO]: Error receiving from AssemblyAI: {e}")
-                                raise
+                    
 
                     tasks = [
-                        asyncio.create_task(receive_from_client()),
-                        asyncio.create_task(receive_from_assemblyai())
+                        asyncio.create_task(receive_from_client(client_websocket, aai_ws, shared_state)),
+                        asyncio.create_task(receive_from_assemblyai(aai_ws, client_websocket, shared_state))
                     ]
 
                     try:
                         await asyncio.gather(*tasks)
                     except asyncio.CancelledError:
-                        print(f"[INFO]: WebSocket tasks cancelled.")
+                        print("[CLIENT WS] WebSocket tasks cancelled due to session shutdown")
                         raise
+                    finally:
+                        for task in tasks:
+                            task.cancel()
+                        await asyncio.gather(*tasks, return_exceptions=True)
+                        print("[CLIENT WS] All tasks cleaned up")
 
             except ConnectionClosedError as aai_err:
-                print(f"[INFO]: AssemblyAI connection closed unexpectedly: {aai_err}")
-                # await websocket.close(code=1011)
+                print(f"[AAI WS] Connection closed unexpectedly: {aai_err}")
             except Exception as aai_err:
-                print(f"[INFO]: Error setting up AssemblyAI connection: {aai_err}")
-                # await websocket.close(code=1011)
+                print(f"[AAI WS] Error during setup: {aai_err}")
+                await asyncio.sleep(1)
         
         else:
-            await websocket.close(code=1011)
-            print("[INFO]: Max retries reached, closing client socket.")
+            await client_websocket.send_text(json.dumps({
+                "type": "error",
+                "detail": "Could not connect to transcription service"
+            }))
+            await asyncio.sleep(0.5)
+            await client_websocket.close(code=1011)
+            print("[CLIENT WS] Max retries reached. Closing client socket.")
 
     except asyncio.CancelledError:
-        print("[INFO]: WebSocket handler cancelled during shutdown.")
+        print("[CLIENT WS] WebSocket handler cancelled during shutdown")
     except Exception as e:
-        print(f"[INFO]: Unexpected error in WebSocket endpoint: {e}")
+        print(f"[CLIENT WS] Unexpected error in WebSocket handler: {e}")

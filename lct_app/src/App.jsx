@@ -2,7 +2,8 @@ import { useState } from "react";
 import Input from "./components/Input";
 import StructuralGraph from "./components/StructuralGraph";
 import ContextualGraph from "./components/ContextualGraph";
-import SaveJson from "./components/SaveJson";
+// import SaveJson from "./components/SaveJson";
+import SaveTranscript from "./components/SaveTranscript";
 import Legend from "./components/Legend";
 import GenerateFormalism from "./components/GenerateFormalism";
 import FormalismList from "./components/FormalismList";
@@ -139,7 +140,8 @@ export default function App() {
           {/* Save Button */}
           {graphData.length > 0 && (
             <div className="absolute top-4 right-4">
-              <SaveJson chunkDict={chunkDict} graphData={graphData} />
+              {/* <SaveJson chunkDict={chunkDict} graphData={graphData} /> */}
+              <SaveTranscript chunkDict={chunkDict} graphData={graphData} />
             </div>
           )}
 

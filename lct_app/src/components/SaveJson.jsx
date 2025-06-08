@@ -35,7 +35,6 @@ export default function SaveJson({ chunkDict, graphData, setGraphData }) {
     document.body.removeChild(a); // Clean up by removing the temporary anchor
 
     // Revoke the object URL to free up resources
-    // This is important for performance and memory management.
     URL.revokeObjectURL(url);
   };
 
@@ -55,7 +54,6 @@ export default function SaveJson({ chunkDict, graphData, setGraphData }) {
       >
         Save Conversation
       </button>
-      {/* The custom dialog box for filename input has been removed. */}
     </div>
   );
 }

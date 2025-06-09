@@ -740,43 +740,30 @@ def generate_formalism(chunks: dict, graph_data: dict, user_pref: str) -> List:
                 })
     return formalism_list
 
-# Serve index.html at root
-# @lct_app.get("/")
-# def read_root():
-#     return FileResponse("frontend_dist/index.html")
-
-# # Serve favicon or other top-level static files
-# @lct_app.get("/favicon.ico")
-# def favicon():
-#     file_path = "frontend_dist/favicon.ico"
-#     if os.path.exists(file_path):
-#         return FileResponse(file_path)
-#     return {}
-
-# # Catch-all for SPA routes (NOT static files)
-# @lct_app.get("/{full_path:path}")
-# async def spa_router(full_path: str):
-#     file_path = f"frontend_dist/{full_path}"
-#     if os.path.exists(file_path):
-#         return FileResponse(file_path)
-#     return FileResponse("frontend_dist/index.html")
-
 
 @lct_app.get("/conversations/", response_model=List[SaveJsonResponseExtended])
 def list_saved_conversations():
     try:
+        print("[INFO] Initializing GCS client...")
         client = storage.Client()
         bucket = client.bucket(GCS_BUCKET_NAME)
+        print(f"[INFO] Accessing bucket: {GCS_BUCKET_NAME}")
 
         blobs = bucket.list_blobs(prefix=GCS_FOLDER + "/")
         saved_files = []
+        print(f"[INFO] Listing blobs with prefix '{GCS_FOLDER}/'")
 
         for blob in blobs:
+            print(f"[DEBUG] Found blob: {blob.name}")
             if not blob.name.endswith(".json"):
+                print(f"[SKIP] Skipping non-JSON file: {blob.name}")
                 continue
 
             try:
-                data = json.loads(blob.download_as_string())
+                print(f"[INFO] Downloading blob: {blob.name}")
+                content = blob.download_as_string()
+                data = json.loads(content)
+
                 conversation_id = data.get("conversation_id")
                 file_name = data.get("file_name")
                 graph_data = data.get("graph_data", [])
@@ -792,11 +779,13 @@ def list_saved_conversations():
                     "message": "Loaded from GCS",
                     "no_of_nodes": no_of_nodes
                 })
+                print(f"[SUCCESS] Loaded conversation: {conversation_id} - {file_name}")
 
             except Exception as file_error:
-                print(f"[INFO]: Error reading {blob.name}: {file_error}")
+                print(f"[ERROR] Error reading {blob.name}: {file_error}")
                 continue
 
+        print(f"[INFO] Total conversations loaded: {len(saved_files)}")
         return saved_files
 
     except Exception as e:
@@ -1158,3 +1147,24 @@ async def websocket_audio_endpoint(client_websocket: WebSocket):
         print("[CLIENT WS] WebSocket handler cancelled during shutdown")
     except Exception as e:
         print(f"[CLIENT WS] Unexpected error in WebSocket handler: {e}")
+        
+# Serve index.html at root
+# @lct_app.get("/")
+# def read_root():
+#     return FileResponse("frontend_dist/index.html")
+
+# # Serve favicon or other top-level static files
+# @lct_app.get("/favicon.ico")
+# def favicon():
+#     file_path = "frontend_dist/favicon.ico"
+#     if os.path.exists(file_path):
+#         return FileResponse(file_path)
+#     return {}
+
+# # Catch-all for SPA routes (NOT static files)
+# @lct_app.get("/{full_path:path}")
+# async def spa_router(full_path: str):
+#     file_path = f"frontend_dist/{full_path}"
+#     if os.path.exists(file_path):
+#         return FileResponse(file_path)
+#     return FileResponse("frontend_dist/index.html")

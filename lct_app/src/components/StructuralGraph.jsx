@@ -132,7 +132,7 @@ export default function StructuralGraph({
     <div
       className={`flex flex-col bg-white shadow-lg rounded-lg p-4 transition-all duration-300 ${
         isFullScreen
-          ? "absolute top-0 left-0 w-full h-full z-50"
+          ? "fixed inset-0 w-screen h-screen z-50" // "absolute top-0 left-0 w-full h-full z-50"
           : "w-full h-full" //[calc(100%-40px)]"
       }`}
     >

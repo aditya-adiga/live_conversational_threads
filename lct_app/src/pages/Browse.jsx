@@ -38,16 +38,21 @@ export default function Browse() {
 
   return (
     <div className="flex flex-col h-screen w-screen bg-gradient-to-br from-blue-500 to-purple-600 text-white">
-        {/* Header */}
-        <div className="relative text-center p-6">
+      {/* Header */}
+      <div className="w-full px-4 py-6 bg-transparent flex items-center justify-between">
+        {/* Back Button */}
         <button
-            onClick={() => navigate("/")}
-            className="absolute left-6 top-1/2 transform -translate-y-1/2 px-4 py-2 bg-white text-blue-600 font-semibold rounded-lg shadow hover:bg-blue-100 transition"
+          onClick={() => navigate("/")}
+          className="px-4 py-2 bg-white text-blue-600 font-semibold rounded-lg shadow hover:bg-blue-100 transition text-sm md:text-base"
         >
-            ⬅ Back
+          ⬅ Back
         </button>
-        <h1 className="text-4xl font-bold">Saved Conversations</h1>
-</div>
+
+        {/* Title */}
+        <h1 className="text-xl md:text-3xl font-bold text-center flex-grow">
+          Saved Conversations
+        </h1>
+      </div>
       {/* <h2 className="text-3xl font-bold mb-6 text-center">Saved Conversations</h2> */}
 
       {loading ? (

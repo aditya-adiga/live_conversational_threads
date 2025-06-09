@@ -157,13 +157,13 @@ export default function ContextualGraph({
     <div
       className={`flex flex-col bg-white shadow-lg rounded-lg p-4 transition-all duration-300 ${
         isFullScreen
-          ? "absolute top-0 left-0 w-full h-full z-50"
+          ? "fixed top-0 left-0 right-0 bottom-0 w-screen h-screen z-50 overflow-hidden" // "absolute top-0 left-0 w-full h-full z-50"
           : "w-full h-full" // [calc(100%-40px)]"
       }`}
     >
-      <div className="relative grid grid-cols-3 items-center justify-between mb-2">
+      <div className="relative grid grid-cols-1 md:grid-cols-3 gap-2 items-center justify-between mb-2">
       {/* Left Actions */}
-      <div className="flex space-x-2 justify-start">
+      <div className="flex justify-center md:justify-start space-x-2">
         <button
           className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
             selectedNode
@@ -196,12 +196,14 @@ export default function ContextualGraph({
       </div>
 
       {/* Center Title */}
-      <h2 className="text-xl font-bold text-gray-800 text-center">
+      <div className="flex justify-center">
+      <h2 className="text-lg md:text-xl font-bold text-gray-800 text-center">
         Thematic Flow of Conversation
       </h2>
+      </div>
 
       {/* Right Actions */}
-      <div className="flex space-x-2 justify-end">
+      <div className="flex justify-center md:justify-end space-x-2">
         <button
           className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
             latestChunk.length > 0 && selectedNode
@@ -229,7 +231,7 @@ export default function ContextualGraph({
 
       {/* Context Card */}
       {showContext && selectedNode && (
-        <div className="p-4 border rounded-lg bg-yellow-100 shadow-md mb-2 z-20">
+        <div className="p-4 border rounded-lg bg-yellow-100 shadow-md mb-2 z-20 max-h-[200px] overflow-y-auto">
           <h3 className="font-semibold text-black">
             Context for: {selectedNode}
           </h3>

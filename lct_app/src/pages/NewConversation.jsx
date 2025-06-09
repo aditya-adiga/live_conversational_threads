@@ -39,14 +39,19 @@ export default function NewConversation() {
   return (
     <div className="flex flex-col h-screen w-screen bg-gradient-to-br from-blue-500 to-purple-600 text-white">
       {/* Header */}
-      <div className="relative text-center p-6">
+      <div className="w-full px-4 py-6 bg-transparent flex items-center justify-between">
+        {/* Back Button */}
         <button
           onClick={() => navigate("/")}
-          className="absolute left-6 top-1/2 transform -translate-y-1/2 px-4 py-2 bg-white text-blue-600 font-semibold rounded-lg shadow hover:bg-blue-100 transition"
+          className="px-4 py-2 bg-white text-blue-600 font-semibold rounded-lg shadow hover:bg-blue-100 transition text-sm md:text-base"
         >
           ⬅ Back
         </button>
-        <h1 className="text-4xl font-bold">Live Conversational Threads</h1>
+
+        {/* Title */}
+        <h1 className="text-xl md:text-3xl font-bold text-center flex-grow">
+          Live Conversational Threads
+        </h1>
       </div>
 
       {!isFormalismView ? (
@@ -64,7 +69,7 @@ export default function NewConversation() {
           </div>
 
           {/* 🔵 Structural Flow - 1/4 height */}
-          <div className="flex-grow bg-white rounded-lg shadow-lg p-4 w-full overflow-hidden flex flex-col">
+          <div className="hidden md:flex flex-grow bg-white rounded-lg shadow-lg p-4 w-full overflow-hidden flex flex-col">
             <StructuralGraph
               graphData={graphData}
               selectedNode={selectedNode}
@@ -74,10 +79,11 @@ export default function NewConversation() {
         </div>
       ) : (
         // 🟣 Formalism layout
-        <div className="flex-grow flex flex-col space-y-4 p-6">
-          <div className="flex space-x-4 h-2/5">
-            {/* Top Left - List of Formalism Options */}
-            <div className="w-1/2 bg-white rounded-lg shadow-lg p-4">
+        <div className="flex-grow flex flex-col space-y-4 p-4 md:p-6">
+          {/* Top Section */}
+          <div className="flex flex-col md:flex-row md:space-x-4 space-y-4 md:space-y-0 md:h-2/5">
+            {/* Top Left - Formalism List */}
+            <div className="w-full md:w-1/2 bg-white rounded-lg shadow-lg p-4">
               <h2 className="text-xl font-bold text-gray-800 text-center mb-2">
                 Generated Formalisms
               </h2>
@@ -90,8 +96,8 @@ export default function NewConversation() {
               />
             </div>
 
-            {/* Top Right - Contextual Flow */}
-            <div className="w-1/2 bg-white rounded-lg shadow-lg p-4">
+            {/* Top Right - Contextual Graph */}
+            <div className="hidden md:block w-full md:w-1/2 bg-white rounded-lg shadow-lg p-4">
               <ContextualGraph
                 graphData={graphData}
                 setGraphData={setGraphData}
@@ -102,7 +108,7 @@ export default function NewConversation() {
           </div>
 
           {/* Bottom - Canvas */}
-          <div className="h-3/5 bg-white rounded-lg shadow-lg p-4 flex flex-col">
+          <div className="bg-white rounded-lg shadow-lg p-4 flex flex-col flex-grow">
             <h2 className="text-xl font-bold text-gray-800 text-center mb-2">
               Formalism Model Diagram
             </h2>
@@ -133,7 +139,7 @@ export default function NewConversation() {
           setFormalismData={setFormalismData}
         />
       </div>
-
+      
       {!isFormalismView && (
         <>
           {/* Audio Input Section */}
@@ -151,7 +157,7 @@ export default function NewConversation() {
 
           {/* Save Transcript Button */}
           {graphData.length > 0 && (
-            <div className="absolute top-4 right-4">
+            <div className="hidden md:block absolute top-4 right-4">
               {/* <SaveJson chunkDict={chunkDict} graphData={graphData} /> */}
               <SaveTranscript chunkDict={chunkDict} />
             </div>
@@ -159,7 +165,7 @@ export default function NewConversation() {
 
           {/* Save Transcript Button Below Audio Input */}
           {graphData.length > 0 && (
-            <div className="sticky bottom-2 mt-2 w-full flex justify-center z-20">
+            <div className="w-full px-4 mt-4 mb-2 z-20 flex justify-center md:sticky md:bottom-2">
               <SaveJson
                 chunkDict={chunkDict}
                 graphData={graphData}
@@ -171,7 +177,7 @@ export default function NewConversation() {
           )}
 
           {/* Legend */}
-          <div className="absolute bottom-4 right-4">
+          <div className="hidden md:block absolute bottom-4 right-4">
             <Legend />
           </div>
         </>

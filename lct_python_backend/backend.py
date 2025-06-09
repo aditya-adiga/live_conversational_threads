@@ -211,7 +211,7 @@ Extract Key Nodes: Identify all topic shifts in the conversation. Each topic shi
 -	How nodes connect thematically (shared concepts, related ideas)
 -	How concepts have evolved or been refined since previous mentions
 -	How ideas build upon each other across different conversation segments
--	Try to not pay too much attention to the chronological order as that is captured separately focus on capturing the contextual relevance.
+-	 Don’t capture direct shifts in conversations as contextual_relation unless there is a relevant contextual relation only then capture it.
 Create cohesive narratives that explain the full relationship context rather than treating these as separate analytical dimensions.
 
 **Define Structure:**
@@ -226,6 +226,7 @@ Create cohesive narratives that explain the full relationship context rather tha
 
 **Handling Updates to Existing JSON**
 If an existing JSON structure is provided along with the transcript, modify it as follows and strictly return only the nodes generated for the current input transcript:
+
 - **Continuing a topic**: If the conversation continues an existing discussion, update the "successor" field of the last relevant node.
 -	**New topic**: If a conversation introduces a new topic, create a new node and properly link it.
 -	**Revisiting a Bookmark**: If "LLM wish bookmark open [name]" appears, find the existing bookmark node and update its "contextual_relation" and "linked_nodes". Do NOT create a new bookmark when revisited—update the existing one instead.
@@ -234,9 +235,10 @@ If an existing JSON structure is provided along with the transcript, modify it a
 **Chronology, Contextual Referencing and Bookmarking**
 If a topic is revisited, create a new node while ensuring proper linking to previous mentions through rich contextual relations. Ensure mutual linking between nodes that provide context to each other through comprehensive relationship explanations.
 
+Each node must include both "predecessor" and "successor" fields to maintain chronological flow, maintaining the flow of the conversation irrespective of how related the topics are and strictly based on temporal relationship.
+
 **Conversational Threads nodes (type: "conversational_thread"):**
 - Every topic shift must be captured as a new node.
-- Each node must include both "predecessor" and "successor" fields to maintain chronological flow.
 - "contextual_relation" must provide integrated explanations of how previous discussions contribute to the current conversation through thematic connections, conceptual evolution, and idea building.
 - "linked_nodes" must track all nodes this node is either drawing context from or providing context to in a single list.
 - For nodes with type="conversational_thread", always set "is_bookmark": false.
@@ -261,6 +263,7 @@ o	"is_contextual_progress": true
 -	Do not create a new node for contextual progress capture. Instead, apply the flag to the relevant existing node where the potential insight was introduced or referenced.
 -**Contextual Relation & Linked Nodes Updates:**
 - "contextual_relation" must provide comprehensive, integrated explanations that demonstrate the full scope of how nodes relate through thematic coherence, conceptual development, and cross-conversational idea building as unified relationship narratives.
+- Don’t capture direct shifts in conversations as contextual_relation unless there is a relevant contextual relation only then capture it.
 - "linked_nodes" must include all references in a single list, capturing all nodes this node draws from or informs.
 - The structure of "predecessor", "successor", and "contextual_relation" must ensure logical and chronological consistency between past and present discussions.
 
@@ -565,7 +568,7 @@ Extract Key Nodes: Identify all topic shifts in the conversation. Each topic shi
 -	How nodes connect thematically (shared concepts, related ideas)
 -	How concepts have evolved or been refined since previous mentions
 -	How ideas build upon each other across different conversation segments
--	Try to not pay too much attention to the chronological order as that is captured separately focus on capturing the contextual relevance.
+-	 Don’t capture direct shifts in conversations as contextual_relation unless there is a relevant contextual relation only then capture it.
 Create cohesive narratives that explain the full relationship context rather than treating these as separate analytical dimensions.
 
 **Define Structure:**
@@ -580,6 +583,7 @@ Create cohesive narratives that explain the full relationship context rather tha
 
 **Handling Updates to Existing JSON**
 If an existing JSON structure is provided along with the transcript, modify it as follows and strictly return only the nodes generated for the current input transcript:
+
 - **Continuing a topic**: If the conversation continues an existing discussion, update the "successor" field of the last relevant node.
 -	**New topic**: If a conversation introduces a new topic, create a new node and properly link it.
 -	**Revisiting a Bookmark**: If "LLM wish bookmark open [name]" appears, find the existing bookmark node and update its "contextual_relation" and "linked_nodes". Do NOT create a new bookmark when revisited—update the existing one instead.
@@ -588,9 +592,10 @@ If an existing JSON structure is provided along with the transcript, modify it a
 **Chronology, Contextual Referencing and Bookmarking**
 If a topic is revisited, create a new node while ensuring proper linking to previous mentions through rich contextual relations. Ensure mutual linking between nodes that provide context to each other through comprehensive relationship explanations.
 
+Each node must include both "predecessor" and "successor" fields to maintain chronological flow, maintaining the flow of the conversation irrespective of how related the topics are and strictly based on temporal relationship.
+
 **Conversational Threads nodes (type: "conversational_thread"):**
 - Every topic shift must be captured as a new node.
-- Each node must include both "predecessor" and "successor" fields to maintain chronological flow.
 - "contextual_relation" must provide integrated explanations of how previous discussions contribute to the current conversation through thematic connections, conceptual evolution, and idea building.
 - "linked_nodes" must track all nodes this node is either drawing context from or providing context to in a single list.
 - For nodes with type="conversational_thread", always set "is_bookmark": false.
@@ -615,6 +620,7 @@ o	"is_contextual_progress": true
 -	Do not create a new node for contextual progress capture. Instead, apply the flag to the relevant existing node where the potential insight was introduced or referenced.
 -**Contextual Relation & Linked Nodes Updates:**
 - "contextual_relation" must provide comprehensive, integrated explanations that demonstrate the full scope of how nodes relate through thematic coherence, conceptual development, and cross-conversational idea building as unified relationship narratives.
+- Don’t capture direct shifts in conversations as contextual_relation unless there is a relevant contextual relation only then capture it.
 - "linked_nodes" must include all references in a single list, capturing all nodes this node draws from or informs.
 - The structure of "predecessor", "successor", and "contextual_relation" must ensure logical and chronological consistency between past and present discussions.
 

@@ -58,6 +58,32 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
     sourceRef.current = null;
     audioContextRef.current = null;
     wsRef.current = null;
+
+    // Attempt save if data exists
+    if (graphData && chunkDict) {
+      setTimeout(async () => {
+        const fileName = prompt("Enter a name for your conversation file:");
+        if (!fileName) {
+          setMessage?.("Save canceled. No file name provided.");
+          return;
+        }
+
+        try {
+          const result = await saveConversationToServer({
+            fileName,
+            graphData,
+            chunkDict,
+            conversationId,
+          });
+          setMessage?.(result.message || "Conversation saved.");
+        } catch (err) {
+          console.error("Failed to save conversation:", err);
+          setMessage?.("Error saving conversation.");
+        }
+      }, 100); // small delay for UI responsiveness
+    } else {
+      setMessage?.("Recording ended, but no data was received.");
+    }
   };
 
   function downsampleBuffer(buffer, inputSampleRate, outputSampleRate = 16000) { // downsampling higher audio frequency

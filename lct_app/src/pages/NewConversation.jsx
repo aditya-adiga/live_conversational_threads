@@ -60,12 +60,13 @@ export default function NewConversation() {
   
           {/* 🟣 Contextual Flow - 3/4 height */}
           <div className="flex-grow-[4] bg-white rounded-lg shadow-lg p-4 w-full overflow-hidden flex flex-col">
-            <ContextualGraph
-              graphData={graphData}
-              setGraphData={setGraphData}
-              selectedNode={selectedNode}
-              setSelectedNode={setSelectedNode}
-            />
+              <ContextualGraph
+                graphData={graphData}
+                chunkDict={chunkDict}
+                setGraphData={setGraphData}
+                selectedNode={selectedNode}
+                setSelectedNode={setSelectedNode}
+              />
           </div>
 
           {/* 🔵 Structural Flow - 1/4 height */}
@@ -100,6 +101,7 @@ export default function NewConversation() {
             <div className="hidden md:block w-full md:w-1/2 bg-white rounded-lg shadow-lg p-4">
               <ContextualGraph
                 graphData={graphData}
+                chunkDict={chunkDict}
                 setGraphData={setGraphData}
                 selectedNode={selectedNode}
                 setSelectedNode={setSelectedNode}

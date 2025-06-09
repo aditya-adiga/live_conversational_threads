@@ -5,12 +5,14 @@ import "reactflow/dist/style.css";
 
 export default function ContextualGraph({
   graphData,
+  chunkDict,
   setGraphData,
   selectedNode,
   setSelectedNode,
 }) {
   const [isFullScreen, setIsFullScreen] = useState(false);
   const [showContext, setShowContext] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
 
   const latestChunk = graphData?.[graphData.length - 1] || [];
   // const jsonData = latestChunk.existing_json || [];
@@ -26,6 +28,7 @@ export default function ContextualGraph({
   useEffect(() => {
     if (!selectedNode) {
       setShowContext(false); // Hide context if selection is cleared elsewhere
+      setShowTranscript(false); // Hide transcript if selection is cleared elsewhere
     }
   }, [selectedNode]);
 
@@ -204,6 +207,22 @@ export default function ContextualGraph({
 
       {/* Right Actions */}
       <div className="flex justify-center md:justify-end space-x-2">
+      <button
+        className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
+          latestChunk.length > 0 && selectedNode
+            ? "bg-purple-300 hover:bg-purple-400"
+            : "bg-gray-300 cursor-not-allowed"
+        }`}
+        onClick={() =>
+          latestChunk.length > 0 &&
+          selectedNode &&
+          setShowTranscript(!showTranscript)
+        }
+        disabled={latestChunk.length === 0 || !selectedNode}
+      >
+        {showTranscript ? "Hide transcript" : "View transcript"}
+      </button>
+
         <button
           className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
             latestChunk.length > 0 && selectedNode
@@ -266,6 +285,26 @@ export default function ContextualGraph({
             )}
         </div>
       )}
+
+      {/* Transcript Card */}
+      {showTranscript && selectedNode && (() => {
+        const selectedNodeData = latestChunk.find(
+          (node) => node.node_name === selectedNode
+        );
+        const chunkId = selectedNodeData?.chunk_id;
+        const transcript = chunkDict?.[chunkId] || "Transcript not available";
+
+        return (
+          <div className="p-4 border rounded-lg bg-purple-100 shadow-md mb-2 z-20 max-h-[200px] overflow-y-auto">
+            <h3 className="font-semibold text-black">
+              Transcript for: {selectedNode}
+            </h3>
+            <p className="text-sm text-black whitespace-pre-wrap">
+              {transcript}
+            </p>
+          </div>
+        );
+      })()}
 
       <div className="flex-grow border rounded-lg overflow-hidden">
         <ReactFlow

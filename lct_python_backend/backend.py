@@ -41,7 +41,7 @@ lct_app.add_middleware(
 )
 
 # Serve JS/CSS/assets from Vite build folder
-# lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
+lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
 
 
 
@@ -1149,22 +1149,22 @@ async def websocket_audio_endpoint(client_websocket: WebSocket):
         print(f"[CLIENT WS] Unexpected error in WebSocket handler: {e}")
         
 # Serve index.html at root
-# @lct_app.get("/")
-# def read_root():
-#     return FileResponse("frontend_dist/index.html")
+@lct_app.get("/")
+def read_root():
+    return FileResponse("frontend_dist/index.html")
 
-# # Serve favicon or other top-level static files
-# @lct_app.get("/favicon.ico")
-# def favicon():
-#     file_path = "frontend_dist/favicon.ico"
-#     if os.path.exists(file_path):
-#         return FileResponse(file_path)
-#     return {}
+# Serve favicon or other top-level static files
+@lct_app.get("/favicon.ico")
+def favicon():
+    file_path = "frontend_dist/favicon.ico"
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    return {}
 
-# # Catch-all for SPA routes (NOT static files)
-# @lct_app.get("/{full_path:path}")
-# async def spa_router(full_path: str):
-#     file_path = f"frontend_dist/{full_path}"
-#     if os.path.exists(file_path):
-#         return FileResponse(file_path)
-#     return FileResponse("frontend_dist/index.html")
+# Catch-all for SPA routes (NOT static files)
+@lct_app.get("/{full_path:path}")
+async def spa_router(full_path: str):
+    file_path = f"frontend_dist/{full_path}"
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    return FileResponse("frontend_dist/index.html")

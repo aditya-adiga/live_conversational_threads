@@ -148,6 +148,13 @@ export default function StructuralGraph({
           nodes={nodes}
           edges={edges}
           fitView
+          // 🔍 Zoom Controls
+          zoomOnPinch={true}
+          zoomOnScroll={true}
+
+          // 🖱️ Pan Controls
+          panOnDrag={true} 
+          panOnScroll={false}
           onNodeClick={(_, node) =>
             setSelectedNode((prevSelected) =>
               prevSelected === node.id ? null : node.id

@@ -272,12 +272,19 @@ export default function ContextualGraph({
           nodes={nodes}
           edges={edges}
           fitView
+           // 🔍 Zoom Controls
+          zoomOnPinch={true}
+          zoomOnScroll={true}
+
+          // 🖱️ Pan Controls
+          panOnDrag={true} 
+          panOnScroll={false}
           onNodeClick={(_, node) =>
-            setSelectedNode((prevSelected) => {
-              const isDeselecting = prevSelected === node.id;
-              if (isDeselecting) setShowContext(false); // Reset context on deselect
-              return isDeselecting ? null : node.id;
-            })
+          setSelectedNode((prevSelected) => {
+            const isDeselecting = prevSelected === node.id;
+            if (isDeselecting) setShowContext(false); // Reset context on deselect
+            return isDeselecting ? null : node.id;
+          })
           } // Sync selection
         >
           <Controls />

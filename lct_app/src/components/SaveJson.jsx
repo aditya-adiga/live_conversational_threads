@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { saveConversationToServer } from "../utils/SaveConversation";
 
-export default function SaveJson({ chunkDict, graphData, conversationId, setMessage, message }) {
+export default function SaveJson({ chunkDict, graphData, conversationId, setMessage, message, fileName, setFileName }) {
   
 
   const isSaveDisabled =
@@ -10,20 +10,27 @@ export default function SaveJson({ chunkDict, graphData, conversationId, setMess
   const handleSave = async () => {
     if (isSaveDisabled) return;
 
-    const fileName = prompt("Enter a name for your conversation file:");
-    if (!fileName) {
+    const newName = prompt("Enter a name for your conversation file:", fileName || "");
+    if (!newName) {
       setMessage("Save canceled. No file name provided.");
       return;
     }
 
-    const result = await saveConversationToServer({
-      fileName,
-      chunkDict,
-      graphData,
-      conversationId,
-    });
+    setFileName(newName);
 
-    setMessage(result.message);
+    try {
+      const result = await saveConversationToServer({
+        fileName: newName,
+        chunkDict,
+        graphData,
+        conversationId,
+      });
+
+      setMessage(`Conversation "${newName}" saved. ${result.message}`);
+    } catch (err) {
+      console.error("Save failed:", err);
+      setMessage("Error saving conversation.");
+    }
   };
 
   useEffect(() => {
@@ -53,7 +60,7 @@ export default function SaveJson({ chunkDict, graphData, conversationId, setMess
         disabled={isSaveDisabled}
         title={isSaveDisabled ? "No data to save" : "Export conversation"}
       >
-        Add Conversation to Archive
+        Rename Conversation
       </button>
 
       {message && (

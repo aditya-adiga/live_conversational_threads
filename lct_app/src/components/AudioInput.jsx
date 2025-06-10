@@ -3,7 +3,7 @@ import { Mic } from "lucide-react";
 
 import { saveConversationToServer } from "../utils/SaveConversation";
 
-export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict, graphData, conversationId, setMessage, message }) {
+export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict, graphData, conversationId, setMessage, message, fileName, setFileName }) {
   const [recording, setRecording] = useState(false);
   const wsRef = useRef(null);
   const audioContextRef = useRef(null);
@@ -11,6 +11,36 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
   const sourceRef = useRef(null);
 
   const pingIntervalRef = useRef(null);
+
+  const lastAutoSaveRef = useRef({ graphData: null, chunkDict: null }); //last saved data
+
+  useEffect(() => {
+    if (!fileName && graphData?.[0]?.[0]?.node_name) {
+      const initialName = graphData[0][0].node_name.replace(/[\/\\:*?"<>|]/g, "");
+      setFileName(initialName);
+    }
+  }, [graphData, fileName, setFileName]);
+
+  useEffect(() => {
+    if (!graphData || !chunkDict || !fileName) return;
+  
+    const timeoutId = setTimeout(async () => {
+      try {
+        await saveConversationToServer({
+          fileName,
+          graphData,
+          chunkDict,
+          conversationId,
+        });
+  
+        lastAutoSaveRef.current = { graphData, chunkDict };
+      } catch (err) {
+        console.error("Silent auto-save failed:", err);
+      }
+    }, 1000);
+  
+    return () => clearTimeout(timeoutId);
+  }, [graphData, chunkDict, fileName, conversationId]);
 
   useEffect(() => {
       if (!message) return;
@@ -60,27 +90,13 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
     wsRef.current = null;
 
     // Attempt save if data exists
-    if (graphData && chunkDict) {
-      setTimeout(async () => {
-        const fileName = prompt("Enter a name for your conversation file:");
-        if (!fileName) {
-          setMessage?.("Save canceled. No file name provided.");
-          return;
-        }
-
-        try {
-          const result = await saveConversationToServer({
-            fileName,
-            graphData,
-            chunkDict,
-            conversationId,
-          });
-          setMessage?.(result.message || "Conversation saved.");
-        } catch (err) {
-          console.error("Failed to save conversation:", err);
-          setMessage?.("Error saving conversation.");
-        }
-      }, 100); // small delay for UI responsiveness
+    if (
+      lastAutoSaveRef.current.graphData &&
+      lastAutoSaveRef.current.chunkDict
+    ) {
+      setTimeout(() => {
+        setMessage?.(`Conversation "${fileName}" saved.`);
+      }, 100);
     } else {
       setMessage?.("Recording ended, but no data was received.");
     }
@@ -268,25 +284,15 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
         }
       };
   
-      // ✅ Save after everything is closed and flushed
-      if (graphData && chunkDict) {
-        setTimeout(async () => {
-          const fileName = prompt("Enter a name for your conversation file:");
-          if (!fileName) {
-            setMessage?.("Save canceled. No file name provided.");
-            return resolve();
-          }
-
-          const result = await saveConversationToServer({
-            fileName,
-            graphData: graphData,
-            chunkDict: chunkDict,
-            conversationId,
-          });
-
-          setMessage?.(result.message || "Conversation saved.");
+      // Save after everything is closed and flushed
+      if (
+        lastAutoSaveRef.current.graphData &&
+        lastAutoSaveRef.current.chunkDict
+      ) {
+        setTimeout(() => {
+          setMessage?.(`Conversation "${fileName}" saved.`);
           resolve();
-        }, 100); // slight delay to ensure UI updates
+        }, 100);
       } else {
         setMessage?.("Recording ended, but no data was received.");
         resolve();

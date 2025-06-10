@@ -23,11 +23,11 @@ from google.cloud import storage
 
 # GLOBAL VARIABLES
 BATCH_SIZE = 4
-MAX_BATCH_SIZE = 24
+MAX_BATCH_SIZE = 12
 
 
 # Directory to save JSON files
-SAVE_DIRECTORY = "../saved_json"
+# SAVE_DIRECTORY = "../saved_json"
 # fastapi app
 lct_app = FastAPI()
 
@@ -41,7 +41,7 @@ lct_app.add_middleware(
 )
 
 # Serve JS/CSS/assets from Vite build folder
-lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
+# lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
 
 
 
@@ -190,8 +190,8 @@ Extract Key Nodes: Identify all topic shifts in the conversation. Each topic shi
   {
     "node_name": "Title of the conversational thread",
     "type": "conversational_thread" or "bookmark",
-    "predecessor": "Previous node name",
-    "successor": "Next node name",
+    "predecessor": "Previous node name temporally",
+    "successor": "Next node name temporally",
     "contextual_relation": {
       "Related Node 1": "Detailed explanation of how this node connects thematically, shows conceptual evolution, and builds upon ideas from the current discussion",
       "Related Node 2": " Another comprehensive explanation that weaves together thematic connections with how concepts have developed",
@@ -215,8 +215,8 @@ Extract Key Nodes: Identify all topic shifts in the conversation. Each topic shi
 Create cohesive narratives that explain the full relationship context rather than treating these as separate analytical dimensions.
 
 **Define Structure:**
-"predecessor" → The direct previous node.
-"successor" → The direct next node.
+"predecessor" → The direct previous node temporally (empty for first node only).
+"successor" → The direct next node temporally.
 "contextual_relation" → Use this to explain how past nodes contribute to the current discussion contextually.
 •	Keys = node names that contribute context.
 •	Values = a detailed explanation of how the multiple referenced nodes influence the current discussion.
@@ -235,7 +235,8 @@ If an existing JSON structure is provided along with the transcript, modify it a
 **Chronology, Contextual Referencing and Bookmarking**
 If a topic is revisited, create a new node while ensuring proper linking to previous mentions through rich contextual relations. Ensure mutual linking between nodes that provide context to each other through comprehensive relationship explanations.
 
-Each node must include both "predecessor" and "successor" fields to maintain chronological flow, maintaining the flow of the conversation irrespective of how related the topics are and strictly based on temporal relationship.
+**Each node must include both "predecessor" and "successor" fields to maintain chronological flow, maintaining the flow of the conversation irrespective of how related the topics are and strictly based on temporal relationship. Don't have predecessor empty if it is not the first node ever.**
+
 
 **Conversational Threads nodes (type: "conversational_thread"):**
 - Every topic shift must be captured as a new node.
@@ -547,8 +548,8 @@ Extract Key Nodes: Identify all topic shifts in the conversation. Each topic shi
   {
     "node_name": "Title of the conversational thread",
     "type": "conversational_thread" or "bookmark",
-    "predecessor": "Previous node name",
-    "successor": "Next node name",
+    "predecessor": "Previous node name temporally",
+    "successor": "Next node name temporally",
     "contextual_relation": {
       "Related Node 1": "Detailed explanation of how this node connects thematically, shows conceptual evolution, and builds upon ideas from the current discussion",
       "Related Node 2": " Another comprehensive explanation that weaves together thematic connections with how concepts have developed",
@@ -572,8 +573,8 @@ Extract Key Nodes: Identify all topic shifts in the conversation. Each topic shi
 Create cohesive narratives that explain the full relationship context rather than treating these as separate analytical dimensions.
 
 **Define Structure:**
-"predecessor" → The direct previous node.
-"successor" → The direct next node.
+"predecessor" → The direct previous node temporally (empty for first node only).
+"successor" → The direct next node temporally.
 "contextual_relation" → Use this to explain how past nodes contribute to the current discussion contextually.
 •	Keys = node names that contribute context.
 •	Values = a detailed explanation of how the multiple referenced nodes influence the current discussion.
@@ -592,7 +593,8 @@ If an existing JSON structure is provided along with the transcript, modify it a
 **Chronology, Contextual Referencing and Bookmarking**
 If a topic is revisited, create a new node while ensuring proper linking to previous mentions through rich contextual relations. Ensure mutual linking between nodes that provide context to each other through comprehensive relationship explanations.
 
-Each node must include both "predecessor" and "successor" fields to maintain chronological flow, maintaining the flow of the conversation irrespective of how related the topics are and strictly based on temporal relationship.
+**Each node must include both "predecessor" and "successor" fields to maintain chronological flow, maintaining the flow of the conversation irrespective of how related the topics are and strictly based on temporal relationship. Don't have predecessor empty if it is not the first node ever.**
+
 
 **Conversational Threads nodes (type: "conversational_thread"):**
 - Every topic shift must be captured as a new node.
@@ -1729,22 +1731,22 @@ async def websocket_audio_endpoint(client_websocket: WebSocket):
         print(f"[CLIENT WS] Unexpected error in WebSocket handler: {e}")
         
 # Serve index.html at root
-@lct_app.get("/")
-def read_root():
-    return FileResponse("frontend_dist/index.html")
+# @lct_app.get("/")
+# def read_root():
+#     return FileResponse("frontend_dist/index.html")
 
-# Serve favicon or other top-level static files
-@lct_app.get("/favicon.ico")
-def favicon():
-    file_path = "frontend_dist/favicon.ico"
-    if os.path.exists(file_path):
-        return FileResponse(file_path)
-    return {}
+# # Serve favicon or other top-level static files
+# @lct_app.get("/favicon.ico")
+# def favicon():
+#     file_path = "frontend_dist/favicon.ico"
+#     if os.path.exists(file_path):
+#         return FileResponse(file_path)
+#     return {}
 
-# Catch-all for SPA routes (NOT static files)
-@lct_app.get("/{full_path:path}")
-async def spa_router(full_path: str):
-    file_path = f"frontend_dist/{full_path}"
-    if os.path.exists(file_path):
-        return FileResponse(file_path)
-    return FileResponse("frontend_dist/index.html")
+# # Catch-all for SPA routes (NOT static files)
+# @lct_app.get("/{full_path:path}")
+# async def spa_router(full_path: str):
+#     file_path = f"frontend_dist/{full_path}"
+#     if os.path.exists(file_path):
+#         return FileResponse(file_path)
+#     return FileResponse("frontend_dist/index.html")

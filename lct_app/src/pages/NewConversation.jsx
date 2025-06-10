@@ -19,6 +19,7 @@ export default function NewConversation() {
   const [formalismData, setFormalismData] = useState({}); // Stores Formalism data
   const [selectedLoopyURL, setSelectedLoopyURL] = useState(""); // Stores Loopy URL
   const [message, setMessage] = useState(""); // message for saving conversation
+  const [fileName, setFileName] = useState(""); //filename for saving conversation
   
   const [conversationId, setConversationId] = useState(() => {
     return crypto.randomUUID(); // uuid for conversation
@@ -154,6 +155,8 @@ export default function NewConversation() {
             conversationId={conversationId}
             setMessage={setMessage}
             message={message}
+            fileName={fileName}
+            setFileName={setFileName}
           />
           </div>
 
@@ -174,6 +177,8 @@ export default function NewConversation() {
                 conversationId={conversationId}
                 setMessage={setMessage}
                 message={message}
+                fileName={fileName}
+                setFileName={setFileName}
               />
             </div>
           )}

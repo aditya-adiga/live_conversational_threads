@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 import time
-from typing import Dict, Generator, List, Any
+from typing import Dict, Generator, List, Any, Optional
 import uuid
 import random
 import asyncio
@@ -17,6 +17,10 @@ from google import genai
 from google.genai import types
 from pathlib import Path
 from google.cloud import storage
+from datetime import datetime
+from lct_python_backend.db import db
+from lct_python_backend.db_helpers import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
+from contextlib import asynccontextmanager
 # from dotenv import load_dotenv
 
 # load_dotenv() 
@@ -28,8 +32,25 @@ MAX_BATCH_SIZE = 12
 
 # Directory to save JSON files
 # SAVE_DIRECTORY = "../saved_json"
+
+# db
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print("[INFO] Connecting to database...")
+    try:
+        await db.connect()
+        print("[INFO] Connected to database.")
+    except Exception as e:
+        print("[ERROR] Failed to connect to database during startup:")
+        import traceback
+        traceback.print_exc()
+        raise e  # re-raise so the app still fails, but now you see why
+    yield
+    print("[INFO] Disconnecting from database...")
+    await db.disconnect()
+    
 # fastapi app
-lct_app = FastAPI()
+lct_app = FastAPI(lifespan=lifespan)
 
 # Configure CORS
 lct_app.add_middleware(
@@ -41,7 +62,7 @@ lct_app.add_middleware(
 )
 
 # Serve JS/CSS/assets from Vite build folder
-# lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
+lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
 
 
 
@@ -96,6 +117,7 @@ class SaveJsonResponseExtended(BaseModel):
     file_name: str
     message: str
     no_of_nodes: int
+    created_at: Optional[str]
     
 class ConversationResponse(BaseModel):
     graph_data: List[Any]
@@ -1254,13 +1276,45 @@ def save_json(file_name: str, chunks: dict, graph_data: dict, conversation_id: s
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error saving JSON: {str(e)}")
     
-def save_json_to_gcs(file_name: str, chunks: dict, graph_data: list, conversation_id: str) -> dict:
+# def save_json_to_gcs(file_name: str, chunks: dict, graph_data: list, conversation_id: str) -> dict:
+#     try:
+#         client = storage.Client()
+#         bucket = client.bucket(GCS_BUCKET_NAME)
+
+#         file_id = conversation_id or str(uuid.uuid4())
+#         blob = bucket.blob(f"{GCS_FOLDER}/{file_id}.json")
+
+#         data = {
+#             "file_name": file_name,
+#             "conversation_id": file_id,
+#             "chunks": chunks,
+#             "graph_data": graph_data
+#         }
+
+#         blob.upload_from_string(json.dumps(data, indent=4), content_type="application/json")
+
+#         return {
+#             "file_id": file_id,
+#             "file_name": file_name,
+#             "message": "Saved to GCS successfully"
+#         }
+
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"GCS Error: {str(e)}")
+    
+def save_json_to_gcs(
+    file_name: str,
+    chunks: dict,
+    graph_data: list,
+    conversation_id: str = None
+) -> dict:
     try:
         client = storage.Client()
         bucket = client.bucket(GCS_BUCKET_NAME)
 
         file_id = conversation_id or str(uuid.uuid4())
-        blob = bucket.blob(f"{GCS_FOLDER}/{file_id}.json")
+        object_path = f"{GCS_FOLDER}/{file_id}.json"
+        blob = bucket.blob(object_path)
 
         data = {
             "file_name": file_name,
@@ -1274,11 +1328,46 @@ def save_json_to_gcs(file_name: str, chunks: dict, graph_data: list, conversatio
         return {
             "file_id": file_id,
             "file_name": file_name,
-            "message": "Saved to GCS successfully"
+            "message": "Saved to GCS successfully",
+            "gcs_path": f"{object_path}"  # path for DB
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"GCS Error: {str(e)}")
+        print(f"[FATAL] Failed to save JSON to GCS: {e}")
+        raise
+    
+def load_conversation_from_gcs(gcs_path: str) -> dict:
+    try:
+        # Split GCS path into bucket and object path
+        if "/" not in gcs_path:
+            raise ValueError("Invalid GCS path. Must be in format 'bucket/path/to/file.json'")
+
+        bucket_name = GCS_BUCKET_NAME
+        object_path = gcs_path
+
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(object_path)
+
+        if not blob.exists():
+            raise HTTPException(status_code=404, detail="Conversation file not found in GCS.")
+        data = json.loads(blob.download_as_string())
+        graph_data = data.get("graph_data")
+        chunk_dict = data.get("chunks")
+
+        if graph_data is None or chunk_dict is None:
+            raise HTTPException(status_code=422, detail="Invalid conversation file structure.")
+
+        return {
+            "graph_data": graph_data,
+            "chunk_dict": chunk_dict,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[FATAL] GCS error loading path '{gcs_path}': {e}")
+        raise HTTPException(status_code=500, detail=f"GCS error: {str(e)}")
 
 def get_node_by_name(graph_data, node_name):
     for node in graph_data:
@@ -1322,89 +1411,127 @@ def generate_formalism(chunks: dict, graph_data: dict, user_pref: str) -> List:
                 })
     return formalism_list
 
-
+# all conversations
 @lct_app.get("/conversations/", response_model=List[SaveJsonResponseExtended])
-def list_saved_conversations():
+async def list_saved_conversations():
     try:
-        print("[INFO] Initializing GCS client...")
-        client = storage.Client()
-        bucket = client.bucket(GCS_BUCKET_NAME)
-        print(f"[INFO] Accessing bucket: {GCS_BUCKET_NAME}")
+        rows = await get_all_conversations()
+        conversations = []
 
-        blobs = bucket.list_blobs(prefix=GCS_FOLDER + "/")
-        saved_files = []
-        print(f"[INFO] Listing blobs with prefix '{GCS_FOLDER}/'")
+        for row in rows:
+            conversations.append({
+                "file_id": str(row["id"]),
+                "file_name": row["file_name"],
+                "message": "Loaded from database",
+                "no_of_nodes": row["no_of_nodes"],
+                "created_at": row["created_at"].isoformat() if isinstance(row["created_at"], datetime) else row["created_at"]
+            })
 
-        for blob in blobs:
-            print(f"[DEBUG] Found blob: {blob.name}")
-            if not blob.name.endswith(".json"):
-                print(f"[SKIP] Skipping non-JSON file: {blob.name}")
-                continue
-
-            try:
-                print(f"[INFO] Downloading blob: {blob.name}")
-                content = blob.download_as_string()
-                data = json.loads(content)
-
-                conversation_id = data.get("conversation_id")
-                file_name = data.get("file_name")
-                graph_data = data.get("graph_data", [])
-
-                no_of_nodes = len(graph_data[0]) if graph_data and isinstance(graph_data[0], list) else 0
-
-                if not conversation_id or not file_name:
-                    raise ValueError("Missing required fields in JSON file.")
-
-                saved_files.append({
-                    "file_id": conversation_id,
-                    "file_name": file_name,
-                    "message": "Loaded from GCS",
-                    "no_of_nodes": no_of_nodes
-                })
-                print(f"[SUCCESS] Loaded conversation: {conversation_id} - {file_name}")
-
-            except Exception as file_error:
-                print(f"[ERROR] Error reading {blob.name}: {file_error}")
-                continue
-
-        print(f"[INFO] Total conversations loaded: {len(saved_files)}")
-        return saved_files
+        print(f"[INFO] Loaded {len(conversations)} conversations from DB")
+        return conversations
 
     except Exception as e:
-        print(f"[FATAL] Unexpected error in /conversations/: {e}")
-        raise HTTPException(status_code=500, detail=f"GCS access error: {str(e)}")
+        print(f"[FATAL] Error fetching from DB: {e}")
+        raise HTTPException(status_code=500, detail=f"Database access error: {str(e)}")
+# def list_saved_conversations():
+#     try:
+#         print("[INFO] Initializing GCS client...")
+#         client = storage.Client()
+#         bucket = client.bucket(GCS_BUCKET_NAME)
+#         print(f"[INFO] Accessing bucket: {GCS_BUCKET_NAME}")
+
+#         blobs = bucket.list_blobs(prefix=GCS_FOLDER + "/")
+#         saved_files = []
+#         print(f"[INFO] Listing blobs with prefix '{GCS_FOLDER}/'")
+
+#         for blob in blobs:
+#             print(f"[DEBUG] Found blob: {blob.name}")
+#             if not blob.name.endswith(".json"):
+#                 print(f"[SKIP] Skipping non-JSON file: {blob.name}")
+#                 continue
+
+#             try:
+#                 print(f"[INFO] Downloading blob: {blob.name}")
+#                 content = blob.download_as_string()
+#                 data = json.loads(content)
+
+#                 conversation_id = data.get("conversation_id")
+#                 file_name = data.get("file_name")
+#                 graph_data = data.get("graph_data", [])
+
+#                 no_of_nodes = len(graph_data[0]) if graph_data and isinstance(graph_data[0], list) else 0
+
+#                 if not conversation_id or not file_name:
+#                     raise ValueError("Missing required fields in JSON file.")
+                
+#                 created_at = blob.time_created.isoformat() if blob.time_created else None
+
+#                 saved_files.append({
+#                     "file_id": conversation_id,
+#                     "file_name": file_name,
+#                     "message": "Loaded from GCS",
+#                     "no_of_nodes": no_of_nodes,
+#                     "created_at": created_at
+#                 })
+#                 print(f"[SUCCESS] Loaded conversation: {conversation_id} - {file_name}")
+
+#             except Exception as file_error:
+#                 print(f"[ERROR] Error reading {blob.name}: {file_error}")
+#                 continue
+
+#         print(f"[INFO] Total conversations loaded: {len(saved_files)}")
+#         return saved_files
+
+#     except Exception as e:
+#         print(f"[FATAL] Unexpected error in /conversations/: {e}")
+#         raise HTTPException(status_code=500, detail=f"GCS access error: {str(e)}")
   
-# get individual conversations  
+# get individual conversations 
 @lct_app.get("/conversations/{conversation_id}", response_model=ConversationResponse)
-def get_conversation(conversation_id: str):
+async def get_conversation(conversation_id: str):
     try:
-        client = storage.Client()
-        bucket = client.bucket(GCS_BUCKET_NAME)
-        blob_path = f"{GCS_FOLDER}/{conversation_id}.json"
-        blob = bucket.blob(blob_path)
+        gcs_path = await get_conversation_gcs_path(conversation_id)
+        if not gcs_path:
+            raise HTTPException(status_code=404, detail="Conversation metadata not found in DB.")
 
-        if not blob.exists():
-            raise HTTPException(status_code=404, detail="Conversation not found in GCS.")
-
-        data = json.loads(blob.download_as_string())
-
-        graph_data = data.get("graph_data")
-        chunk_dict = data.get("chunks")
-
-        if graph_data is None or chunk_dict is None:
-            raise HTTPException(status_code=422, detail="Invalid conversation file structure.")
-
-        return {
-            "graph_data": graph_data,
-            "chunk_dict": chunk_dict,
-        }
+        return load_conversation_from_gcs(gcs_path)
 
     except HTTPException:
         raise
-
     except Exception as e:
-        print(f"[FATAL] Error fetching {conversation_id} from GCS: {e}")
-        raise HTTPException(status_code=500, detail=f"GCS error: {str(e)}")
+        print(f"[FATAL] Error loading conversation '{conversation_id}': {e}")
+        raise HTTPException(status_code=500, detail=f"Server error: {str(e)}") 
+# @lct_app.get("/conversations/{conversation_id}", response_model=ConversationResponse)
+# def get_conversation(conversation_id: str):
+#     try:
+#         client = storage.Client()
+#         bucket = client.bucket(GCS_BUCKET_NAME)
+#         blob_path = f"{GCS_FOLDER}/{conversation_id}.json"
+#         print(f"bucket: {bucket}, blob: {blob_path}")
+#         blob = bucket.blob(blob_path)
+
+#         if not blob.exists():
+#             raise HTTPException(status_code=404, detail="Conversation not found in GCS.")
+
+#         data = json.loads(blob.download_as_string())
+
+#         graph_data = data.get("graph_data")
+#         chunk_dict = data.get("chunks")
+
+#         if graph_data is None or chunk_dict is None:
+#             raise HTTPException(status_code=422, detail="Invalid conversation file structure.")
+
+#         return {
+#             "graph_data": graph_data,
+#             "chunk_dict": chunk_dict,
+#         }
+
+#     except HTTPException:
+#         raise
+
+#     except Exception as e:
+#         print(f"[FATAL] Error fetching {conversation_id} from GCS: {e}")
+#         raise HTTPException(status_code=500, detail=f"GCS error: {str(e)}")
     
     
 # Endpoint to get transcript chunks
@@ -1443,28 +1570,72 @@ async def generate_context_stream(request: ChunkedRequest):
 @lct_app.post("/save_json/", response_model=SaveJsonResponse)
 async def save_json_call(request: SaveJsonRequest):
     """
-    FastAPI route to save JSON data using an external function.
+    FastAPI route to save JSON data and insert metadata into the DB.
     """
     try:
-        # Validate input data
+        # Validate input
         if not request.file_name.strip():
             raise HTTPException(status_code=400, detail="File name cannot be empty.")
 
-        if not isinstance(request.chunks, dict) or not isinstance(request.graph_data, List):
+        if not isinstance(request.chunks, dict) or not isinstance(request.graph_data, list):
             raise HTTPException(status_code=400, detail="Chunks must be a valid dictionary and Graph Data must be a valid list.")
+
         try:
-            # result = save_json(request.file_name, request.chunks, request.graph_data, request.conversation_id) # save json function
-            result = save_json_to_gcs(request.file_name, request.chunks, request.graph_data, request.conversation_id) # save json function
+            result = save_json_to_gcs(
+                request.file_name,
+                request.chunks,
+                request.graph_data,
+                request.conversation_id
+            )
         except Exception as file_error:
             raise HTTPException(status_code=500, detail=f"File saving error: {str(file_error)}")
+
+        # Insert metadata into DB
+        number_of_nodes = len(request.graph_data[0]) if request.graph_data and isinstance(request.graph_data[0], list) else 0
+        print("graph data check: ", request.graph_data)
+        print("number of nodes: ", len(request.graph_data[0]) if request.graph_data and isinstance(request.graph_data[0], list) else 0)
+        metadata = {
+            "id": result["file_id"],
+            "file_name": result["file_name"],
+            "no_of_nodes": number_of_nodes,
+            "gcs_path": result["gcs_path"],
+            "created_at": datetime.utcnow()
+        }
+
+        await insert_conversation_metadata(metadata)
 
         return result
 
     except HTTPException as http_err:
-        raise http_err  # Re-raise HTTP exceptions as they are
+        raise http_err
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Unexpected error: {str(e)}")
+# @lct_app.post("/save_json/", response_model=SaveJsonResponse)
+# async def save_json_call(request: SaveJsonRequest):
+#     """
+#     FastAPI route to save JSON data using an external function.
+#     """
+#     try:
+#         # Validate input data
+#         if not request.file_name.strip():
+#             raise HTTPException(status_code=400, detail="File name cannot be empty.")
+
+#         if not isinstance(request.chunks, dict) or not isinstance(request.graph_data, List):
+#             raise HTTPException(status_code=400, detail="Chunks must be a valid dictionary and Graph Data must be a valid list.")
+#         try:
+#             # result = save_json(request.file_name, request.chunks, request.graph_data, request.conversation_id) # save json function
+#             result = save_json_to_gcs(request.file_name, request.chunks, request.graph_data, request.conversation_id) # save json function
+#         except Exception as file_error:
+#             raise HTTPException(status_code=500, detail=f"File saving error: {str(file_error)}")
+
+#         return result
+
+#     except HTTPException as http_err:
+#         raise http_err  # Re-raise HTTP exceptions as they are
+
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
     
 @lct_app.post("/generate_formalism/", response_model=generateFormalismResponse)
 async def generate_formalism_call(request: generateFormalismRequest):
@@ -1731,22 +1902,22 @@ async def websocket_audio_endpoint(client_websocket: WebSocket):
         print(f"[CLIENT WS] Unexpected error in WebSocket handler: {e}")
         
 # Serve index.html at root
-# @lct_app.get("/")
-# def read_root():
-#     return FileResponse("frontend_dist/index.html")
+@lct_app.get("/")
+def read_root():
+    return FileResponse("frontend_dist/index.html")
 
-# # Serve favicon or other top-level static files
-# @lct_app.get("/favicon.ico")
-# def favicon():
-#     file_path = "frontend_dist/favicon.ico"
-#     if os.path.exists(file_path):
-#         return FileResponse(file_path)
-#     return {}
+# Serve favicon or other top-level static files
+@lct_app.get("/favicon.ico")
+def favicon():
+    file_path = "frontend_dist/favicon.ico"
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    return {}
 
-# # Catch-all for SPA routes (NOT static files)
-# @lct_app.get("/{full_path:path}")
-# async def spa_router(full_path: str):
-#     file_path = f"frontend_dist/{full_path}"
-#     if os.path.exists(file_path):
-#         return FileResponse(file_path)
-#     return FileResponse("frontend_dist/index.html")
+# Catch-all for SPA routes (NOT static files)
+@lct_app.get("/{full_path:path}")
+async def spa_router(full_path: str):
+    file_path = f"frontend_dist/{full_path}"
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    return FileResponse("frontend_dist/index.html")

@@ -136,12 +136,12 @@ export default function StructuralGraph({
           : "w-full h-full" //[calc(100%-40px)]"
       }`}
     >
-      <div className="relative flex items-center justify-center mb-2">
+      {/* <div className="relative flex items-center justify-center mb-2">
         
       <h2 className="mx-auto text-xl font-bold text-gray-800 text-center">
               Chronological Flow of Conversation
             </h2>
-      </div>
+      </div> */}
 
       <div className="flex-grow border rounded-lg overflow-hidden">
         <ReactFlow

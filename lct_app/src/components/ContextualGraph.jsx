@@ -9,8 +9,10 @@ export default function ContextualGraph({
   setGraphData,
   selectedNode,
   setSelectedNode,
+  isFullScreen,
+  setIsFullScreen,
 }) {
-  const [isFullScreen, setIsFullScreen] = useState(false);
+  // const [isFullScreen, setIsFullScreen] = useState(false);
   const [showContext, setShowContext] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
 
@@ -164,93 +166,70 @@ export default function ContextualGraph({
           : "w-full h-full" // [calc(100%-40px)]"
       }`}
     >
-      <div className="relative grid grid-cols-1 md:grid-cols-3 gap-2 items-center justify-between mb-2">
-      {/* Left Actions */}
-      <div className="flex justify-center md:justify-start space-x-2">
-        <button
-          className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
-            selectedNode
-              ? "bg-green-300 hover:bg-green-400"
-              : "bg-gray-300 cursor-not-allowed"
-          }`}
-          onClick={() => toggleNodeProperty("is_contextual_progress")}
-          disabled={!selectedNode}
-        >
-          {latestChunk.find((node) => node.node_name === selectedNode)
-            ?.is_contextual_progress
-            ? "Unmark contextual progress"
-            : "Mark contextual progress"}
-        </button>
-
-        <button
-          className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
-            selectedNode
-              ? "bg-blue-300 hover:bg-blue-400"
-              : "bg-gray-300 cursor-not-allowed"
-          }`}
-          onClick={() => toggleNodeProperty("is_bookmark")}
-          disabled={!selectedNode}
-        >
-          {latestChunk.find((node) => node.node_name === selectedNode)
-            ?.is_bookmark
-            ? "Remove Bookmark"
-            : "Create Bookmark"}
-        </button>
-      </div>
-
-      {/* Center Title */}
-      <div className="flex justify-center">
-      <h2 className="text-lg md:text-xl font-bold text-gray-800 text-center">
-        Thematic Flow of Conversation
-      </h2>
-      </div>
-
-      {/* Right Actions */}
-      <div className="flex justify-center md:justify-end space-x-2">
-      <button
-        className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
-          latestChunk.length > 0 && selectedNode
-            ? "bg-purple-300 hover:bg-purple-400"
-            : "bg-gray-300 cursor-not-allowed"
-        }`}
-        onClick={() =>
-          latestChunk.length > 0 &&
-          selectedNode &&
-          setShowTranscript(!showTranscript)
-        }
-        disabled={latestChunk.length === 0 || !selectedNode}
-      >
-        {showTranscript ? "Hide transcript" : "View transcript"}
-      </button>
-
+      <div className="flex justify-between items-center mb-2 w-full">
+        {/* Left: Context Button */}
         <button
           className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
             latestChunk.length > 0 && selectedNode
               ? "bg-yellow-300 hover:bg-yellow-400"
               : "bg-gray-300 cursor-not-allowed"
           }`}
-          onClick={() =>
-            latestChunk.length > 0 &&
-            selectedNode &&
-            setShowContext(!showContext)
-          }
+          onClick={() => {
+            if (latestChunk.length > 0 && selectedNode) {
+              const nextState = !showContext;
+              setShowContext(nextState);
+              if (!nextState) {
+                setShowTranscript(false);
+              }
+            }
+          }}
+
           disabled={latestChunk.length === 0 || !selectedNode}
         >
-          {showContext ? "Hide context" : "What's the context?"}
+          {showContext ? "Hide  Context" : "Context"}
         </button>
 
+        {/* Right: Fullscreen Button */}
         <button
           className="px-4 py-2 bg-blue-100 text-white rounded-lg shadow-md hover:bg-blue-200 active:scale-95 transition"
           onClick={() => setIsFullScreen(!isFullScreen)}
         >
-          {isFullScreen ? "❌" : "🔎"}
+          {isFullScreen ? "🡼" : "⛶"}
         </button>
       </div>
-    </div>
 
       {/* Context Card */}
       {showContext && selectedNode && (
         <div className="p-4 border rounded-lg bg-yellow-100 shadow-md mb-2 z-20 max-h-[200px] overflow-y-auto">
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <button
+              className="px-4 py-2 rounded-lg shadow-md bg-green-300 hover:bg-green-400"
+              onClick={() => toggleNodeProperty("is_contextual_progress")}
+            >
+              {latestChunk.find((node) => node.node_name === selectedNode)
+                ?.is_contextual_progress
+                ? "Unmark contextual progress"
+                : "Mark contextual progress"}
+            </button>
+
+            <button
+              className="px-4 py-2 rounded-lg shadow-md bg-blue-300 hover:bg-blue-400"
+              onClick={() => toggleNodeProperty("is_bookmark")}
+            >
+              {latestChunk.find((node) => node.node_name === selectedNode)
+                ?.is_bookmark
+                ? "Remove Bookmark"
+                : "Create Bookmark"}
+            </button>
+
+            <button
+              className="px-4 py-2 rounded-lg shadow-md bg-purple-300 hover:bg-purple-400"
+              onClick={() => setShowTranscript(!showTranscript)}
+            >
+              {showTranscript ? "Hide transcript" : "View transcript"}
+            </button>
+          </div>
+          
           <h3 className="font-semibold text-black">
             Context for: {selectedNode}
           </h3>
@@ -322,6 +301,7 @@ export default function ContextualGraph({
           setSelectedNode((prevSelected) => {
             const isDeselecting = prevSelected === node.id;
             if (isDeselecting) setShowContext(false); // Reset context on deselect
+            if (isDeselecting) setShowTranscript(false); // Reset context on deselect
             return isDeselecting ? null : node.id;
           })
           } // Sync selection

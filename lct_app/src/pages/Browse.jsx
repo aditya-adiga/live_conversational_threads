@@ -24,6 +24,9 @@ export default function Browse() {
         }
 
         const data = await response.json();
+
+        data.sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); //sort based on time
+
         setConversations(data);
       } catch (err) {
         console.error("Error fetching conversations:", err.message);
@@ -72,6 +75,7 @@ export default function Browse() {
               <p className="text-sm text-gray-500">ID: {conv.file_id}</p>
               <p className="text-sm text-gray-500">Number of Nodes: {conv.no_of_nodes}</p>
               <p className="text-sm text-green-600">{conv.message}</p>
+              <p className="text-sm text-gray-400">  Created at: {new Date(conv.created_at).toLocaleString()} </p>
 
               <button
                 className="mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition"

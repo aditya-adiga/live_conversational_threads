@@ -3,7 +3,7 @@ import { Mic } from "lucide-react";
 
 import { saveConversationToServer } from "../utils/SaveConversation";
 
-export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict, graphData, conversationId, setMessage, message, fileName, setFileName }) {
+export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict, graphData, conversationId, setConversationId, setMessage, message, fileName, setFileName }) {
   const [recording, setRecording] = useState(false);
   const wsRef = useRef(null);
   const audioContextRef = useRef(null);
@@ -13,13 +13,22 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
   const pingIntervalRef = useRef(null);
 
   const lastAutoSaveRef = useRef({ graphData: null, chunkDict: null }); //last saved data
+  const wasRecording = useRef(false);
+
+  const fileNameWasReset = useRef(false);
 
   useEffect(() => {
-    if (!fileName && graphData?.[0]?.[0]?.node_name) {
+    if (
+      fileNameWasReset.current &&
+      graphData &&
+      graphData !== lastAutoSaveRef.current.graphData && // 🛡 ensure it's "new"
+      graphData?.[0]?.[0]?.node_name
+    ) {
       const initialName = graphData[0][0].node_name.replace(/[\/\\:*?"<>|]/g, "");
       setFileName(initialName);
+      fileNameWasReset.current = false;
     }
-  }, [graphData, fileName, setFileName]);
+  }, [graphData]);
 
   useEffect(() => {
     if (!graphData || !chunkDict || !fileName) return;
@@ -41,6 +50,13 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
   
     return () => clearTimeout(timeoutId);
   }, [graphData, chunkDict, fileName, conversationId]);
+
+  useEffect(() => {
+    if (wasRecording.current && !recording) {
+      alert("Recording has stopped.");
+    }
+    wasRecording.current = recording;
+  }, [recording]);
 
   useEffect(() => {
       if (!message) return;
@@ -96,7 +112,7 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
     ) {
       setTimeout(() => {
         setMessage?.(`Conversation "${fileName}" saved.`);
-      }, 100);
+      }, 10);
     } else {
       setMessage?.("Recording ended, but no data was received.");
     }
@@ -135,6 +151,14 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
   }
 
   const startRecording = async () => {
+    // clear the previous graph and chunk
+    onDataReceived?.([]);
+    onChunksReceived?.({}); 
+    //reset filename
+    setFileName?.("");
+    fileNameWasReset.current = true;
+    //setting conversation ID
+    setConversationId?.(crypto.randomUUID());
     // Open microphone
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
@@ -292,7 +316,7 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
         setTimeout(() => {
           setMessage?.(`Conversation "${fileName}" saved.`);
           resolve();
-        }, 100);
+        }, 10);
       } else {
         setMessage?.("Recording ended, but no data was received.");
         resolve();

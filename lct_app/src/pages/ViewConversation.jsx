@@ -18,7 +18,8 @@ export default function ViewConversation() {
   const [selectedFormalism, setSelectedFormalism] = useState(null); // stores selected formalism
   const [formalismData, setFormalismData] = useState({}); // Stores Formalism data
   const [selectedLoopyURL, setSelectedLoopyURL] = useState(""); // Stores Loopy URL
-  const [message, setMessage] = useState(""); // message for saving conversation
+  // const [message, setMessage] = useState(""); // message for saving conversation
+  const [isFullScreen, setIsFullScreen] = useState(false); // full screen status
 
 const { conversationId } = useParams();
 
@@ -40,22 +41,44 @@ useEffect(() => {
     });
 }, [conversationId]);
 
+useEffect(() => {
+  setIsFullScreen(true); // Trigger fullscreen on load
+}, []);
+
   return (
     <div className="flex flex-col h-screen w-screen bg-gradient-to-br from-blue-500 to-purple-600 text-white">
       {/* Header */}
-      <div className="w-full px-4 py-6 bg-transparent flex items-center justify-between">
-        {/* Back Button */}
-        <button
-          onClick={() => navigate("/browse")}
-          className="px-4 py-2 bg-white text-blue-600 font-semibold rounded-lg shadow hover:bg-blue-100 transition text-sm md:text-base"
-        >
-          ⬅ Back
-        </button>
+      <div className="w-full px-4 py-4 bg-transparent flex flex-row justify-between items-start md:grid md:grid-cols-3 md:items-center gap-2">
+        {/* Left: Back Button */}
+        <div className="w-full md:w-auto flex justify-start">
+          <button
+            onClick={() => navigate("/browse")}
+            className="px-4 py-2 h-10 bg-white text-blue-600 font-semibold rounded-lg shadow hover:bg-blue-100 transition text-sm md:text-base"
+          >
+            ⬅ Back
+          </button>
+        </div>
 
-        {/* Title */}
-        <h1 className="text-xl md:text-3xl font-bold text-center flex-grow">
-          Live Conversational Threads
-        </h1>
+        {/* Center: GenerateFormalism Buttons */}
+        <div className="w-full md:w-auto flex justify-end md:justify-center">
+          <div className="flex flex-col md:flex-row items-end md:items-center gap-2">
+            <GenerateFormalism
+              chunkDict={chunkDict}
+              graphData={graphData}
+              isFormalismView={isFormalismView}
+              setIsFormalismView={setIsFormalismView}
+              formalismData={formalismData}
+              setFormalismData={setFormalismData}
+            />
+          </div>
+        </div>
+
+        {/* Right: Save Transcript (desktop only) */}
+        {graphData.length > 0 && (
+          <div className="hidden md:flex justify-end w-full">
+            <SaveTranscript chunkDict={chunkDict} />
+          </div>
+        )}
       </div>
 
       {!isFormalismView ? (
@@ -70,6 +93,8 @@ useEffect(() => {
                 setGraphData={setGraphData}
                 selectedNode={selectedNode}
                 setSelectedNode={setSelectedNode}
+                isFullScreen={isFullScreen}
+                setIsFullScreen={setIsFullScreen}
               />
           </div>
 
@@ -109,6 +134,8 @@ useEffect(() => {
                 setGraphData={setGraphData}
                 selectedNode={selectedNode}
                 setSelectedNode={setSelectedNode}
+                isFullScreen={isFullScreen}
+                setIsFullScreen={setIsFullScreen}
               />
             </div>
           </div>
@@ -134,28 +161,8 @@ useEffect(() => {
         </div>
       )}
 
-      {/* GenerateFormalism Section */}
-      <div className="sticky bottom-0 w-full p-4 z-10">
-        <GenerateFormalism
-          chunkDict={chunkDict}
-          graphData={graphData}
-          isFormalismView={isFormalismView}
-          setIsFormalismView={setIsFormalismView}
-          formalismData={formalismData}
-          setFormalismData={setFormalismData}
-        />
-      </div>
-
       {!isFormalismView && (
         <>
-
-          {/* Save Transcript Button */}
-          {graphData.length > 0 && (
-            <div className="hidden md:block absolute top-4 right-4">
-              {/* <SaveJson chunkDict={chunkDict} graphData={graphData} /> */}
-              <SaveTranscript chunkDict={chunkDict} />
-            </div>
-          )}
 
           {/* Legend */}
           <div className="hidden md:block absolute bottom-4 right-4">

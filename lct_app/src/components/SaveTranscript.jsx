@@ -26,20 +26,18 @@ export default function SaveJson({ chunkDict}) {
   };
 
   return (
-    <div className="relative">
-      <button
-        className={`absolute top-4 right-4 px-3 py-1.5 rounded-lg shadow-md text-sm font-semibold whitespace-nowrap  
-                  ${
-                    isSaveDisabled
-                      ? "bg-gray-200 cursor-not-allowed"
-                      : "bg-green-300 hover:bg-green-400 text-white"
-                  }`}
-        onClick={handleSave}
-        disabled={isSaveDisabled}
-        title={isSaveDisabled ? "No data to save" : "Export transcript"}
-      >
-        Download Transcript
-      </button>
-    </div>
+    <button
+      className={`h-full px-4 py-2 rounded-lg shadow-md text-sm font-semibold whitespace-nowrap flex items-center transition 
+        ${
+          isSaveDisabled
+              ? "bg-gray-200 cursor-not-allowed"
+              : "bg-green-300 hover:bg-green-400 text-white"
+        }`}
+      onClick={handleSave}
+      disabled={isSaveDisabled}
+      title={isSaveDisabled ? "No data to save" : "Export transcript"}
+    >
+      Download Transcript
+    </button>
   );
 }

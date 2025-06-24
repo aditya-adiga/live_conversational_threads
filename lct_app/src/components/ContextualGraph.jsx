@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import PropTypes from "prop-types";
 import ReactFlow, { Controls, Background } from "reactflow";
 import dagre from "dagre"; // Import Dagre for auto-layout
 import "reactflow/dist/style.css";
@@ -15,23 +16,59 @@ export default function ContextualGraph({
   // const [isFullScreen, setIsFullScreen] = useState(false);
   const [showContext, setShowContext] = useState(false);
   const [showTranscript, setShowTranscript] = useState(false);
+  const [isClaimsPanelOpen, setIsClaimsPanelOpen] = useState(false);
+  const [factCheckResults, setFactCheckResults] = useState(null);
+  const [isFactChecking, setIsFactChecking] = useState(false);
 
   const latestChunk = graphData?.[graphData.length - 1] || [];
-  // const jsonData = latestChunk.existing_json || [];
+
+  const selectedNodeData = useMemo(() => {
+    if (!selectedNode) return null;
+    return latestChunk.find((node) => node.node_name === selectedNode);
+  }, [selectedNode, latestChunk]);
+
+  const selectedNodeClaims = selectedNodeData?.claims || [];
 
   // logging
   useEffect(() => {
     console.log("Full Graph Data(contextual):", graphData);
     console.log("Latest Chunk Data(contextual):", latestChunk);
-    // console.log("Extracted JSON Data:", jsonData);
   }, [graphData]);
+
+  const handleFactCheck = async () => {
+    if (selectedNodeClaims.length === 0) return;
+    setIsFactChecking(true);
+    setFactCheckResults(null); // Clear previous results
+
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || "";
+      const response = await fetch(`${API_URL}/fact_check_claims/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claims: selectedNodeClaims }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Fact-check failed: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      setFactCheckResults(data.claims);
+    } catch (error) {
+      console.error("Error during fact-checking:", error);
+    } finally {
+      setIsFactChecking(false);
+    }
+  };
 
   // set context from outside
   useEffect(() => {
     if (!selectedNode) {
-      setShowContext(false); // Hide context if selection is cleared elsewhere
-      setShowTranscript(false); // Hide transcript if selection is cleared elsewhere
+      setShowContext(false); 
+      setShowTranscript(false);
+      setIsClaimsPanelOpen(false);
     }
+    setFactCheckResults(null);
   }, [selectedNode]);
 
   // toggle button functionality
@@ -99,14 +136,14 @@ export default function ContextualGraph({
           (n) => n.node_name === relatedNode
         );
 
-        const isLinkedEdge =
-          item.linked_nodes.includes(relatedNode) ||
-          (relatedNodeData?.linked_nodes || []).includes(item.node_name); // Check if either node in the edge is in linked_nodes
+        const isRelatedEdge = Object.keys(
+          relatedNodeData?.contextual_relation || {}
+        ).includes(item.node_name);
 
         const isFormalismEdge =
-          isLinkedEdge &&
+        isRelatedEdge &&
           (item.is_contextual_progress ||
-            relatedNodeData?.is_contextual_progress); // Check if either node in the edge has is_contextual_progress = true
+            relatedNodeData?.is_contextual_progress);
 
         return {
           id: `e-${relatedNode}-${item.node_name}`,
@@ -167,7 +204,21 @@ export default function ContextualGraph({
       }`}
     >
       <div className="flex justify-between items-center mb-2 w-full">
-        {/* Left: Context Button */}
+        {/* Left: Claims Button */}
+        <button
+          className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
+            selectedNodeClaims.length > 0
+              ? "bg-indigo-300 hover:bg-indigo-400"
+              : "bg-gray-300 cursor-not-allowed"
+          }`}
+          onClick={() => setIsClaimsPanelOpen(true)}
+          disabled={selectedNodeClaims.length === 0}
+        >
+          Claims
+        </button>
+        
+
+        {/* Middle: Context Button */}
         <button
           className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
             latestChunk.length > 0 && selectedNode
@@ -285,6 +336,74 @@ export default function ContextualGraph({
         );
       })()}
 
+      {/* Claims Panel */}
+      <div
+        className={`
+          fixed top-0 right-0 h-full bg-indigo-100 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out
+          p-4 sm:p-6 overflow-y-auto w-full sm:w-1/2 lg:w-1/3
+          ${isClaimsPanelOpen ? "translate-x-0" : "translate-x-full"}
+        `}
+      >
+          <button
+              onClick={() => setIsClaimsPanelOpen(false)}
+              className="absolute top-4 right-4 text-gray-600 hover:text-gray-900 text-2xl"
+          >
+              &times;
+          </button>
+          <h2 className="text-xl font-bold mb-4 text-indigo-900">Claims for: {selectedNode}</h2>
+          
+          {selectedNodeClaims.length > 0 ? (
+              <>
+                  <ul className="space-y-2 mb-4 list-disc pl-5">
+                      {selectedNodeClaims.map((claim, index) => (
+                          <li key={index} className="text-sm text-gray-800">{claim}</li>
+                      ))}
+                  </ul>
+                  <button
+                      onClick={handleFactCheck}
+                      disabled={isFactChecking}
+                      className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-600 disabled:bg-blue-300"
+                  >
+                      {isFactChecking ? "Fact-Checking..." : `Fact Check Claims for ${selectedNode}`}
+                  </button>
+              </>
+          ) : (
+              <p>No claims were found for this node.</p>
+          )}
+
+          {isFactChecking && !factCheckResults && <p className="mt-4 text-center">Loading results...</p>}
+
+          {factCheckResults && (
+              <div className="mt-6 space-y-4">
+                  <h3 className="text-lg font-bold text-indigo-800 border-b pb-2 mb-2">Fact-Check Results</h3>
+                  {factCheckResults.map((result, index) => (
+                      <div key={index} className="p-4 rounded-lg bg-white shadow">
+                          <p className="font-semibold text-gray-800">{result.claim}</p>
+                          <p className={`font-bold text-sm ${
+                              result.verdict === 'True' ? 'text-green-700' : 
+                              result.verdict === 'False' ? 'text-red-700' : 'text-yellow-600'
+                          }`}>Verdict: {result.verdict}</p>
+                          <p className="mt-2 text-sm text-gray-600">{result.explanation}</p>
+                          {result.citations.length > 0 && (
+                              <div className="mt-2">
+                                  <h4 className="font-semibold text-xs text-gray-500 uppercase tracking-wider">Sources:</h4>
+                                  <ul className="list-disc pl-5 space-y-1 mt-1">
+                                      {result.citations.map((cite, i) => (
+                                          <li key={i} className="text-sm">
+                                              <a href={cite.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                                  {cite.title}
+                                              </a>
+                                          </li>
+                                      ))}
+                                  </ul>
+                              </div>
+                          )}
+                      </div>
+                  ))}
+              </div>
+          )}
+      </div>
+
       <div className="flex-grow border rounded-lg overflow-hidden">
         <ReactFlow
           nodes={nodes}
@@ -313,3 +432,26 @@ export default function ContextualGraph({
     </div>
   );
 }
+
+ContextualGraph.propTypes = {
+  graphData: PropTypes.arrayOf(
+    PropTypes.arrayOf(
+      PropTypes.shape({
+        node_name: PropTypes.string.isRequired,
+        claims: PropTypes.arrayOf(PropTypes.string),
+        is_contextual_progress: PropTypes.bool,
+        is_bookmark: PropTypes.bool,
+        summary: PropTypes.string,
+        contextual_relation: PropTypes.object,
+        chunk_id: PropTypes.string,
+        conversation_id: PropTypes.string,
+      })
+    )
+  ),
+  chunkDict: PropTypes.object,
+  setGraphData: PropTypes.func.isRequired,
+  selectedNode: PropTypes.string,
+  setSelectedNode: PropTypes.func.isRequired,
+  isFullScreen: PropTypes.bool.isRequired,
+  setIsFullScreen: PropTypes.func.isRequired,
+};

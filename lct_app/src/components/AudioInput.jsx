@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import PropTypes from "prop-types";
 import { Mic } from "lucide-react";
 
 import { saveConversationToServer } from "../utils/SaveConversation";
@@ -14,6 +15,7 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
 
   const lastAutoSaveRef = useRef({ graphData: null, chunkDict: null }); //last saved data
   const wasRecording = useRef(false);
+  const graphDataFromSocket = useRef(false);
 
   const fileNameWasReset = useRef(false);
 
@@ -24,9 +26,22 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
       graphData !== lastAutoSaveRef.current.graphData && // 🛡 ensure it's "new"
       graphData?.[0]?.[0]?.node_name
     ) {
-      const initialName = graphData[0][0].node_name.replace(/[\/\\:*?"<>|]/g, "");
+      const initialName = graphData[0][0].node_name.replace(/[/:*?"<>|]/g, "");
       setFileName(initialName);
       fileNameWasReset.current = false;
+    }
+  }, [graphData, setFileName]);
+
+  useEffect(() => {
+    if (!graphData || graphDataFromSocket.current) {
+      graphDataFromSocket.current = false; // Reset flag
+      return;
+    }
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(
+        JSON.stringify({ type: "graph_data_update", data: graphData })
+      );
+      logToServer("Sent graphData update to backend.");
     }
   }, [graphData]);
 
@@ -213,6 +228,7 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
         const message = JSON.parse(event.data);
     
         if (message.type === "existing_json") {
+          graphDataFromSocket.current = true; // Set flag before updating state
           onDataReceived?.(message.data);
         }
       
@@ -328,7 +344,7 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
 
   return (
     <div className="flex items-center space-x-3">
-  <button
+      <button
         onClick={recording ? stopRecording : startRecording} // Toggle recording state on click
         className={`
           flex items-center justify-center w-20 h-20 rounded-full
@@ -346,8 +362,21 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
         `}
         aria-label={recording ? "Stop recording" : "Start recording"} // Screen reader label
       >
-      <Mic size={24} />
-    </button>
-  </div>
+        <Mic size={24} />
+      </button>
+    </div>
   );
 }
+
+AudioInput.propTypes = {
+  onDataReceived: PropTypes.func,
+  onChunksReceived: PropTypes.func,
+  chunkDict: PropTypes.object,
+  graphData: PropTypes.array,
+  conversationId: PropTypes.string,
+  setConversationId: PropTypes.func,
+  setMessage: PropTypes.func,
+  message: PropTypes.string,
+  fileName: PropTypes.string,
+  setFileName: PropTypes.func,
+};

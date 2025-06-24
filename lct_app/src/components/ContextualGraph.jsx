@@ -37,6 +37,13 @@ export default function ContextualGraph({
 
   const handleFactCheck = async () => {
     if (selectedNodeClaims.length === 0) return;
+
+    // Check for existing results first
+    if (selectedNodeData?.claims_checked) {
+      setFactCheckResults(selectedNodeData.claims_checked);
+      return;
+    }
+
     setIsFactChecking(true);
     setFactCheckResults(null); // Clear previous results
 
@@ -54,6 +61,16 @@ export default function ContextualGraph({
 
       const data = await response.json();
       setFactCheckResults(data.claims);
+
+      // Update graphData to include the checked claims
+      const newGraphData = graphData.map((chunk) =>
+        chunk.map((node) =>
+          node.node_name === selectedNode
+            ? { ...node, claims_checked: data.claims }
+            : node
+        )
+      );
+      setGraphData(newGraphData);
     } catch (error) {
       console.error("Error during fact-checking:", error);
     } finally {
@@ -445,6 +462,7 @@ ContextualGraph.propTypes = {
         contextual_relation: PropTypes.object,
         chunk_id: PropTypes.string,
         conversation_id: PropTypes.string,
+        claims_checked: PropTypes.array,
       })
     )
   ),

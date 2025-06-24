@@ -1,32 +1,91 @@
 import { useState, useMemo, useEffect } from "react";
+import PropTypes from "prop-types";
 import ReactFlow, { Controls, Background } from "reactflow";
 import dagre from "dagre"; // Import Dagre for auto-layout
 import "reactflow/dist/style.css";
 
 export default function ContextualGraph({
   graphData,
+  chunkDict,
   setGraphData,
   selectedNode,
   setSelectedNode,
+  isFullScreen,
+  setIsFullScreen,
 }) {
-  const [isFullScreen, setIsFullScreen] = useState(false);
+  // const [isFullScreen, setIsFullScreen] = useState(false);
   const [showContext, setShowContext] = useState(false);
+  const [showTranscript, setShowTranscript] = useState(false);
+  const [isClaimsPanelOpen, setIsClaimsPanelOpen] = useState(false);
+  const [factCheckResults, setFactCheckResults] = useState(null);
+  const [isFactChecking, setIsFactChecking] = useState(false);
 
   const latestChunk = graphData?.[graphData.length - 1] || [];
-  // const jsonData = latestChunk.existing_json || [];
+
+  const selectedNodeData = useMemo(() => {
+    if (!selectedNode) return null;
+    return latestChunk.find((node) => node.node_name === selectedNode);
+  }, [selectedNode, latestChunk]);
+
+  const selectedNodeClaims = selectedNodeData?.claims || [];
 
   // logging
   useEffect(() => {
     console.log("Full Graph Data(contextual):", graphData);
     console.log("Latest Chunk Data(contextual):", latestChunk);
-    // console.log("Extracted JSON Data:", jsonData);
   }, [graphData]);
+
+  const handleFactCheck = async () => {
+    if (selectedNodeClaims.length === 0) return;
+
+    // Check for existing results first
+    if (selectedNodeData?.claims_checked) {
+      setFactCheckResults(selectedNodeData.claims_checked);
+      return;
+    }
+
+    setIsFactChecking(true);
+    setFactCheckResults(null); // Clear previous results
+
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || "";
+      const response = await fetch(`${API_URL}/fact_check_claims/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claims: selectedNodeClaims }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Fact-check failed: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      setFactCheckResults(data.claims);
+
+      // Update graphData to include the checked claims
+      const newGraphData = graphData.map((chunk) =>
+        chunk.map((node) =>
+          node.node_name === selectedNode
+            ? { ...node, claims_checked: data.claims }
+            : node
+        )
+      );
+      setGraphData(newGraphData);
+    } catch (error) {
+      console.error("Error during fact-checking:", error);
+    } finally {
+      setIsFactChecking(false);
+    }
+  };
 
   // set context from outside
   useEffect(() => {
     if (!selectedNode) {
-      setShowContext(false); // Hide context if selection is cleared elsewhere
+      setShowContext(false); 
+      setShowTranscript(false);
+      setIsClaimsPanelOpen(false);
     }
+    setFactCheckResults(null);
   }, [selectedNode]);
 
   // toggle button functionality
@@ -94,14 +153,14 @@ export default function ContextualGraph({
           (n) => n.node_name === relatedNode
         );
 
-        const isLinkedEdge =
-          item.linked_nodes.includes(relatedNode) ||
-          (relatedNodeData?.linked_nodes || []).includes(item.node_name); // Check if either node in the edge is in linked_nodes
+        const isRelatedEdge = Object.keys(
+          relatedNodeData?.contextual_relation || {}
+        ).includes(item.node_name);
 
         const isFormalismEdge =
-          isLinkedEdge &&
+        isRelatedEdge &&
           (item.is_contextual_progress ||
-            relatedNodeData?.is_contextual_progress); // Check if either node in the edge has is_contextual_progress = true
+            relatedNodeData?.is_contextual_progress);
 
         return {
           id: `e-${relatedNode}-${item.node_name}`,
@@ -157,80 +216,88 @@ export default function ContextualGraph({
     <div
       className={`flex flex-col bg-white shadow-lg rounded-lg p-4 transition-all duration-300 ${
         isFullScreen
-          ? "absolute top-0 left-0 w-full h-full z-50"
-          : "w-full h-[calc(100%-40px)]"
+          ? "fixed top-0 left-0 right-0 bottom-0 w-screen h-screen z-50 overflow-hidden" // "absolute top-0 left-0 w-full h-full z-50"
+          : "w-full h-full" // [calc(100%-40px)]"
       }`}
     >
-      <div className="flex justify-between items-center mb-2">
-        <div className="flex space-x-2">
-          {/* Formalism Toggle */}
-          <button
-            className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
-              selectedNode
-                ? "bg-green-300 hover:bg-green-400"
-                : "bg-gray-300 cursor-not-allowed"
-            }`}
-            onClick={() => toggleNodeProperty("is_contextual_progress")}
-            disabled={!selectedNode}
-          >
-            {latestChunk.find((node) => node.node_name === selectedNode)
-              ?.is_contextual_progress
-              ? "Unmark contextual progress"
-              : "Mark contextual progress"}
-          </button>
+      <div className="flex justify-between items-center mb-2 w-full">
+        {/* Left: Claims Button */}
+        <button
+          className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
+            selectedNodeClaims.length > 0
+              ? "bg-indigo-300 hover:bg-indigo-400"
+              : "bg-gray-300 cursor-not-allowed"
+          }`}
+          onClick={() => setIsClaimsPanelOpen(true)}
+          disabled={selectedNodeClaims.length === 0}
+        >
+          Claims
+        </button>
+        
 
-          {/* Bookmark Toggle */}
-          <button
-            className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
-              selectedNode
-                ? "bg-blue-300 hover:bg-blue-400"
-                : "bg-gray-300 cursor-not-allowed"
-            }`}
-            onClick={() => toggleNodeProperty("is_bookmark")}
-            disabled={!selectedNode}
-          >
-            {latestChunk.find((node) => node.node_name === selectedNode)
-              ?.is_bookmark
-              ? "Remove Bookmark"
-              : "Create Bookmark"}
-          </button>
-        </div>
-
-        <h2 className="text-lg font-semibold text-center flex-grow">
-          Contextual Flow
-        </h2>
-
-        <div className="flex space-x-2">
-          {/* Show Context Button */}
-          <button
-            className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
-              latestChunk.length > 0 && selectedNode
-                ? "bg-yellow-300 hover:bg-yellow-400"
-                : "bg-gray-300 cursor-not-allowed"
-            }`}
-            onClick={() =>
-              latestChunk.length > 0 &&
-              selectedNode &&
-              setShowContext(!showContext)
+        {/* Middle: Context Button */}
+        <button
+          className={`px-4 py-2 rounded-lg shadow-md transition active:scale-95 ${
+            latestChunk.length > 0 && selectedNode
+              ? "bg-yellow-300 hover:bg-yellow-400"
+              : "bg-gray-300 cursor-not-allowed"
+          }`}
+          onClick={() => {
+            if (latestChunk.length > 0 && selectedNode) {
+              const nextState = !showContext;
+              setShowContext(nextState);
+              if (!nextState) {
+                setShowTranscript(false);
+              }
             }
-            disabled={latestChunk.length === 0 || !selectedNode}
-          >
-            {showContext ? "Hide context" : "What's the context?"}
-          </button>
+          }}
 
-          {/* Fullscreen Toggle Button */}
-          <button
-            className="px-4 py-2 bg-blue-100 text-white rounded-lg shadow-md hover:bg-blue-200 active:scale-95 transition"
-            onClick={() => setIsFullScreen(!isFullScreen)}
-          >
-            {isFullScreen ? "❌" : "🔎"}
-          </button>
-        </div>
+          disabled={latestChunk.length === 0 || !selectedNode}
+        >
+          {showContext ? "Hide  Context" : "Context"}
+        </button>
+
+        {/* Right: Fullscreen Button */}
+        <button
+          className="px-4 py-2 bg-blue-100 text-white rounded-lg shadow-md hover:bg-blue-200 active:scale-95 transition"
+          onClick={() => setIsFullScreen(!isFullScreen)}
+        >
+          {isFullScreen ? "🡼" : "⛶"}
+        </button>
       </div>
 
       {/* Context Card */}
       {showContext && selectedNode && (
-        <div className="p-4 border rounded-lg bg-yellow-100 shadow-md mb-2 z-20">
+        <div className="p-4 border rounded-lg bg-yellow-100 shadow-md mb-2 z-20 max-h-[200px] overflow-y-auto">
+            <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <button
+              className="px-4 py-2 rounded-lg shadow-md bg-green-300 hover:bg-green-400"
+              onClick={() => toggleNodeProperty("is_contextual_progress")}
+            >
+              {latestChunk.find((node) => node.node_name === selectedNode)
+                ?.is_contextual_progress
+                ? "Unmark contextual progress"
+                : "Mark contextual progress"}
+            </button>
+
+            <button
+              className="px-4 py-2 rounded-lg shadow-md bg-blue-300 hover:bg-blue-400"
+              onClick={() => toggleNodeProperty("is_bookmark")}
+            >
+              {latestChunk.find((node) => node.node_name === selectedNode)
+                ?.is_bookmark
+                ? "Remove Bookmark"
+                : "Create Bookmark"}
+            </button>
+
+            <button
+              className="px-4 py-2 rounded-lg shadow-md bg-purple-300 hover:bg-purple-400"
+              onClick={() => setShowTranscript(!showTranscript)}
+            >
+              {showTranscript ? "Hide transcript" : "View transcript"}
+            </button>
+          </div>
+          
           <h3 className="font-semibold text-black">
             Context for: {selectedNode}
           </h3>
@@ -266,17 +333,113 @@ export default function ContextualGraph({
         </div>
       )}
 
+      {/* Transcript Card */}
+      {showTranscript && selectedNode && (() => {
+        const selectedNodeData = latestChunk.find(
+          (node) => node.node_name === selectedNode
+        );
+        const chunkId = selectedNodeData?.chunk_id;
+        const transcript = chunkDict?.[chunkId] || "Transcript not available";
+
+        return (
+          <div className="p-4 border rounded-lg bg-purple-100 shadow-md mb-2 z-20 max-h-[200px] overflow-y-auto">
+            <h3 className="font-semibold text-black">
+              Transcript for: {selectedNode}
+            </h3>
+            <p className="text-sm text-black whitespace-pre-wrap">
+              {transcript}
+            </p>
+          </div>
+        );
+      })()}
+
+      {/* Claims Panel */}
+      <div
+        className={`
+          fixed top-0 right-0 h-full bg-indigo-100 shadow-2xl z-50 transform transition-transform duration-300 ease-in-out
+          p-4 sm:p-6 overflow-y-auto w-full sm:w-1/2 lg:w-1/3
+          ${isClaimsPanelOpen ? "translate-x-0" : "translate-x-full"}
+        `}
+      >
+          <button
+              onClick={() => setIsClaimsPanelOpen(false)}
+              className="absolute top-4 right-4 text-gray-600 hover:text-gray-900 text-2xl"
+          >
+              &times;
+          </button>
+          <h2 className="text-xl font-bold mb-4 text-indigo-900">Claims for: {selectedNode}</h2>
+          
+          {selectedNodeClaims.length > 0 ? (
+              <>
+                  <ul className="space-y-2 mb-4 list-disc pl-5">
+                      {selectedNodeClaims.map((claim, index) => (
+                          <li key={index} className="text-sm text-gray-800">{claim}</li>
+                      ))}
+                  </ul>
+                  <button
+                      onClick={handleFactCheck}
+                      disabled={isFactChecking}
+                      className="w-full px-4 py-2 bg-blue-500 text-white rounded-lg shadow hover:bg-blue-600 disabled:bg-blue-300"
+                  >
+                      {isFactChecking ? "Fact-Checking..." : `Fact Check Claims for ${selectedNode}`}
+                  </button>
+              </>
+          ) : (
+              <p>No claims were found for this node.</p>
+          )}
+
+          {isFactChecking && !factCheckResults && <p className="mt-4 text-center">Loading results...</p>}
+
+          {factCheckResults && (
+              <div className="mt-6 space-y-4">
+                  <h3 className="text-lg font-bold text-indigo-800 border-b pb-2 mb-2">Fact-Check Results</h3>
+                  {factCheckResults.map((result, index) => (
+                      <div key={index} className="p-4 rounded-lg bg-white shadow">
+                          <p className="font-semibold text-gray-800">{result.claim}</p>
+                          <p className={`font-bold text-sm ${
+                              result.verdict === 'True' ? 'text-green-700' : 
+                              result.verdict === 'False' ? 'text-red-700' : 'text-yellow-600'
+                          }`}>Verdict: {result.verdict}</p>
+                          <p className="mt-2 text-sm text-gray-600">{result.explanation}</p>
+                          {result.citations.length > 0 && (
+                              <div className="mt-2">
+                                  <h4 className="font-semibold text-xs text-gray-500 uppercase tracking-wider">Sources:</h4>
+                                  <ul className="list-disc pl-5 space-y-1 mt-1">
+                                      {result.citations.map((cite, i) => (
+                                          <li key={i} className="text-sm">
+                                              <a href={cite.url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+                                                  {cite.title}
+                                              </a>
+                                          </li>
+                                      ))}
+                                  </ul>
+                              </div>
+                          )}
+                      </div>
+                  ))}
+              </div>
+          )}
+      </div>
+
       <div className="flex-grow border rounded-lg overflow-hidden">
         <ReactFlow
           nodes={nodes}
           edges={edges}
           fitView
+           // 🔍 Zoom Controls
+          zoomOnPinch={true}
+          zoomOnScroll={true}
+
+          // 🖱️ Pan Controls
+          panOnDrag={true} 
+          panOnScroll={false}
           onNodeClick={(_, node) =>
-            setSelectedNode((prevSelected) => {
-              const isDeselecting = prevSelected === node.id;
-              if (isDeselecting) setShowContext(false); // Reset context on deselect
-              return isDeselecting ? null : node.id;
-            })
+          setSelectedNode((prevSelected) => {
+            const isDeselecting = prevSelected === node.id;
+            if (isDeselecting) setShowContext(false); // Reset context on deselect
+            if (isDeselecting) setShowTranscript(false); // Reset context on deselect
+            return isDeselecting ? null : node.id;
+          })
           } // Sync selection
         >
           <Controls />
@@ -286,3 +449,27 @@ export default function ContextualGraph({
     </div>
   );
 }
+
+ContextualGraph.propTypes = {
+  graphData: PropTypes.arrayOf(
+    PropTypes.arrayOf(
+      PropTypes.shape({
+        node_name: PropTypes.string.isRequired,
+        claims: PropTypes.arrayOf(PropTypes.string),
+        is_contextual_progress: PropTypes.bool,
+        is_bookmark: PropTypes.bool,
+        summary: PropTypes.string,
+        contextual_relation: PropTypes.object,
+        chunk_id: PropTypes.string,
+        conversation_id: PropTypes.string,
+        claims_checked: PropTypes.array,
+      })
+    )
+  ),
+  chunkDict: PropTypes.object,
+  setGraphData: PropTypes.func.isRequired,
+  selectedNode: PropTypes.string,
+  setSelectedNode: PropTypes.func.isRequired,
+  isFullScreen: PropTypes.bool.isRequired,
+  setIsFullScreen: PropTypes.func.isRequired,
+};

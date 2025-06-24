@@ -132,30 +132,29 @@ export default function StructuralGraph({
     <div
       className={`flex flex-col bg-white shadow-lg rounded-lg p-4 transition-all duration-300 ${
         isFullScreen
-          ? "absolute top-0 left-0 w-full h-full z-50"
-          : "w-full h-[calc(100%-40px)]"
+          ? "fixed inset-0 w-screen h-screen z-50" // "absolute top-0 left-0 w-full h-full z-50"
+          : "w-full h-full" //[calc(100%-40px)]"
       }`}
     >
-      <div className="flex justify-between items-center mb-2">
-        <h2 className="text-lg font-semibold text-center flex-grow">
-          Structural Flow
-        </h2>
-
-        {/* Fullscreen Toggle Button */}
-
-        <button
-          className="px-4 py-2 bg-blue-100 text-white rounded-lg shadow-md hover:bg-blue-200 active:scale-95 transition"
-          onClick={() => setIsFullScreen(!isFullScreen)}
-        >
-          {isFullScreen ? "❌" : "🔎"}
-        </button>
-      </div>
+      {/* <div className="relative flex items-center justify-center mb-2">
+        
+      <h2 className="mx-auto text-xl font-bold text-gray-800 text-center">
+              Chronological Flow of Conversation
+            </h2>
+      </div> */}
 
       <div className="flex-grow border rounded-lg overflow-hidden">
         <ReactFlow
           nodes={nodes}
           edges={edges}
           fitView
+          // 🔍 Zoom Controls
+          zoomOnPinch={true}
+          zoomOnScroll={true}
+
+          // 🖱️ Pan Controls
+          panOnDrag={true} 
+          panOnScroll={false}
           onNodeClick={(_, node) =>
             setSelectedNode((prevSelected) =>
               prevSelected === node.id ? null : node.id

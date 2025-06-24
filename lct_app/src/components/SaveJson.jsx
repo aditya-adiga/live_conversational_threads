@@ -1,61 +1,73 @@
-import { useState, useRef, useEffect } from "react"; 
+import { useState, useEffect } from "react";
+import { saveConversationToServer } from "../utils/SaveConversation";
 
-export default function SaveJson({ chunkDict, graphData, setGraphData }) {
-  // Disable Save if no graphData is available or if it's an empty object
-  const isSaveDisabled = !graphData || Object.keys(graphData).length === 0;
+export default function SaveJson({ chunkDict, graphData, conversationId, setMessage, message, fileName, setFileName }) {
+  
 
-  const handleSave = () => {
-    // Prevent action if the button is disabled (though it shouldn't be clickable)
-    if (isSaveDisabled) {
-      console.warn("Save action attempted while disabled.");
+  const isSaveDisabled =
+    !chunkDict || Object.keys(chunkDict).length === 0 || !graphData || graphData.length === 0;
+
+  const handleSave = async () => {
+    if (isSaveDisabled) return;
+
+    const newName = prompt("Enter a name for your conversation file:", fileName || "");
+    if (!newName) {
+      setMessage("Save canceled. No file name provided.");
       return;
     }
 
-    const dataToSave = {
-      chunks: chunkDict || {}, 
-      graph_data: graphData || {},
-    };
+    setFileName(newName);
 
-    const jsonString = JSON.stringify(dataToSave, null, 2);
+    try {
+      const result = await saveConversationToServer({
+        fileName: newName,
+        chunkDict,
+        graphData,
+        conversationId,
+      });
 
-    // A Blob is a file-like object of immutable, raw data.
-    const blob = new Blob([jsonString], { type: "application/json" });
-
-    // This URL can be used as a source for downloads.
-    const url = URL.createObjectURL(blob);
-
-    // Create a temporary anchor element to trigger the download
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "conversation_data.json";
-
-    // Append the anchor to the body, click it, and then remove it
-    document.body.appendChild(a);
-    a.click(); // Programmatically click the anchor to trigger download
-    document.body.removeChild(a); // Clean up by removing the temporary anchor
-
-    // Revoke the object URL to free up resources
-    // This is important for performance and memory management.
-    URL.revokeObjectURL(url);
+      setMessage(`Conversation "${newName}" saved. ${result.message}`);
+    } catch (err) {
+      console.error("Save failed:", err);
+      setMessage("Error saving conversation.");
+    }
   };
 
+  useEffect(() => {
+    if (!message) return;
+
+    const handleClick = () => {
+      setMessage("");
+    };
+
+    window.addEventListener("click", handleClick);
+
+    return () => {
+      window.removeEventListener("click", handleClick);
+    };
+  }, [message]);
+
   return (
-    <div className="relative">
-      {/* Save Button */}
+    <div className="flex flex-col items-center space-y-2">
       <button
-        className={`absolute top-4 right-4 px-3 py-1.5 rounded-lg shadow-md text-sm font-semibold whitespace-nowrap  
-                  ${
-                    isSaveDisabled
-                      ? "bg-gray-200 cursor-not-allowed" // Reverted to original disabled style
-                      : "bg-green-300 hover:bg-green-400 text-white" // Reverted to original enabled style
-                  }`}
-        onClick={handleSave} // Directly call handleSave when clicked
+        className={`px-4 py-2 rounded-lg text-sm font-semibold  
+          ${
+            isSaveDisabled
+              ? "bg-gray-200 cursor-not-allowed"
+              : "bg-blue-300 hover:bg-blue-400 text-white"
+          }`}
+        onClick={handleSave}
         disabled={isSaveDisabled}
-        title={isSaveDisabled ? "No data to save" : "Export conversation"} // Add a title for better UX
+        title={isSaveDisabled ? "No data to save" : "Export conversation"}
       >
-        Save Conversation
+        Rename Conversation
       </button>
-      {/* The custom dialog box for filename input has been removed. */}
+
+      {message && (
+        <div className="text-sm text-white bg-gray-900 px-3 py-1 rounded shadow">
+          {message}
+        </div>
+      )}
     </div>
   );
 }

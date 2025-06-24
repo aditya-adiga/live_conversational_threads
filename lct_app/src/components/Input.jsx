@@ -29,8 +29,9 @@ export default function Input({ onChunksReceived, onDataReceived }) {
     // formData1.append("transcript", text);
 
     try {
+      const API_URL = import.meta.env.VITE_API_URL || "";
       // **Step 1: Get Chunks**
-      const chunkResponse = await fetch("http://localhost:8000/get_chunks/", {
+      const chunkResponse = await fetch(`${API_URL}/get_chunks/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -54,7 +55,7 @@ export default function Input({ onChunksReceived, onDataReceived }) {
 
       // **Step 2: Send Chunks as JSON String**
       const response = await fetch(
-        "http://localhost:8000/generate-context-stream/",
+        `${API_URL}/generate-context-stream/`,
         {
           method: "POST",
           headers: {

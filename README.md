@@ -6,7 +6,7 @@ This application is designed to enhance conversation flow by intelligently ident
 
 Check out our application demo:
 
-[![Live Conversational Threads Demo](https://img.youtube.com/vi/DEMO_VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=DEMO_VIDEO_ID) `// needs to be added.`
+[Live Conversational Threads Demo](https://youtu.be/sflh9t_Y1eQ?feature=shared)
 
 For detailed documentation and understanding of conversational threading concepts, please refer to our [project writeup](https://docs.google.com/document/d/11sC8fKkNCs09fFBztFqq6rp8b83UQiX2qA1kKF2GpYM/edit?usp=sharing). `// needs to be added.`
 

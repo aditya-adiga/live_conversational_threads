@@ -117,3 +117,18 @@ Once the backend server is running, you can access:
 3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
+
+## License
+
+This project is licensed under the [GNU General Public License v3.0 (GPLv3)](LICENSE).
+
+You are free to use, modify, and distribute this software under the terms of the GPLv3.
+
+## Commercial Use
+
+If you would like to use this software in a **closed-source or commercial product**,  
+or if you're interested in a **commercial license** with different terms (e.g., without the GPL's copyleft requirements),  
+please contact me to discuss options:
+
+Email: [adityaadiga6@gmail.com]  
+github: [https://github.com/aditya-adiga]

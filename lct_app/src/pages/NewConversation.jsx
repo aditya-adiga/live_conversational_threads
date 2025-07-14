@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 // import Input from "./components/Input";
-import AudioInput from "../components/AudioInput";
+// import AudioInput from "../components/AudioInput";
+import AudioInputReconnect from "../components/AudioInputReconnect";
 import StructuralGraph from "../components/StructuralGraph";
 import ContextualGraph from "../components/ContextualGraph";
 import SaveJson from "../components/SaveJson";
@@ -158,7 +159,7 @@ export default function NewConversation() {
         <>
           {/* Audio Input Section */}
           <div className="sticky bottom-0 w-full p-4 flex justify-center z-20">
-          <AudioInput
+          <AudioInputReconnect
             onDataReceived={handleDataReceived}
             onChunksReceived={handleChunksReceived}
             chunkDict={chunkDict}

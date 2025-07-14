@@ -21,9 +21,11 @@ from google.cloud import storage
 from datetime import datetime
 # from db import db
 # from db_helpers import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
-from lct_python_backend.db import db
-from lct_python_backend.db_helpers import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
-from contextlib import asynccontextmanager
+# from lct_python_backend.db import db
+# from lct_python_backend.db_helpers import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
+# from firestore_db import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
+from lct_python_backend.firestore_db import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
+# from contextlib import asynccontextmanager
 # from dotenv import load_dotenv
 
 # load_dotenv() 
@@ -37,23 +39,24 @@ MAX_BATCH_SIZE = 12
 # SAVE_DIRECTORY = "../saved_json"
 
 # db
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    print("[INFO] Connecting to database...")
-    try:
-        await db.connect()
-        print("[INFO] Connected to database.")
-    except Exception as e:
-        print("[ERROR] Failed to connect to database during startup:")
-        import traceback
-        traceback.print_exc()
-        raise e  # re-raise so the app still fails, but now you see why
-    yield
-    print("[INFO] Disconnecting from database...")
-    await db.disconnect()
+# @asynccontextmanager
+# async def lifespan(app: FastAPI):
+#     print("[INFO] Connecting to database...")
+#     try:
+#         await db.connect()
+#         print("[INFO] Connected to database.")
+#     except Exception as e:
+#         print("[ERROR] Failed to connect to database during startup:")
+#         import traceback
+#         traceback.print_exc()
+#         raise e  # re-raise so the app still fails, but now you see why
+#     yield
+#     print("[INFO] Disconnecting from database...")
+#     await db.disconnect()
     
 # fastapi app
-lct_app = FastAPI(lifespan=lifespan)
+# lct_app = FastAPI(lifespan=lifespan)
+lct_app = FastAPI()
 
 # Configure CORS
 lct_app.add_middleware(
@@ -65,7 +68,7 @@ lct_app.add_middleware(
 )
 
 # Serve JS/CSS/assets from Vite build folder
-# lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
+lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
 
 
 
@@ -672,6 +675,8 @@ If a topic is revisited, create a new node while ensuring proper linking to prev
 
 Each node must include both "predecessor" and "successor" fields to maintain chronological flow, maintaining the flow of the conversation irrespective of how related the topics are and strictly based on temporal relationship.
 
+**VERY STRICTLY** only the first node should have predecessor as null and the last node should have successor as null
+
 **Conversational Threads nodes(“is_bookmark”: false):**
 - Every topic shift must be captured as a new node.
 - "contextual_relation" must provide integrated explanations of how previous discussions contribute to the current conversation through thematic connections, conceptual evolution, and idea building.
@@ -697,9 +702,8 @@ o	"is_contextual_progress": true
 -	Do not create a new node for contextual progress capture. Instead, apply the flag to the relevant existing node where the potential insight was introduced or referenced.
 -**Contextual Relation & Linked Nodes Updates:**
 - "contextual_relation" must provide comprehensive, integrated explanations that demonstrate the full scope of how nodes relate through thematic coherence, conceptual development, and cross-conversational idea building as unified relationship narratives.
-- Don’t capture direct shifts in conversations as contextual_relation unless there is a relevant contextual relation only then capture it.
+- **VERY STRICTLY** Don’t capture direct shifts in conversations as contextual_relation unless there is a relevant contextual relation only then capture it. Direct transitions are “NOT” contextual_relation.
 - "linked_nodes" must include all references in a single list, capturing all nodes this node draws from or informs.
-- The structure of "predecessor", "successor", and "contextual_relation" must ensure logical and chronological consistency between past and present discussions.
 - The structure of "predecessor", "successor", and "contextual_relation" must ensure logical and chronological consistency between past and present discussions.
 
 **Example Input**
@@ -1506,7 +1510,8 @@ def generate_formalism(chunks: dict, graph_data: dict, user_pref: str) -> List:
 @lct_app.get("/conversations/", response_model=List[SaveJsonResponseExtended])
 async def list_saved_conversations():
     try:
-        rows = await get_all_conversations()
+        # rows = await get_all_conversations()
+        rows = get_all_conversations()
         conversations = []
 
         for row in rows:
@@ -1581,7 +1586,8 @@ async def list_saved_conversations():
 @lct_app.get("/conversations/{conversation_id}", response_model=ConversationResponse)
 async def get_conversation(conversation_id: str):
     try:
-        gcs_path = await get_conversation_gcs_path(conversation_id)
+        # gcs_path = await get_conversation_gcs_path(conversation_id)
+        gcs_path = get_conversation_gcs_path(conversation_id)
         if not gcs_path:
             raise HTTPException(status_code=404, detail="Conversation metadata not found in DB.")
 
@@ -1693,7 +1699,8 @@ async def save_json_call(request: SaveJsonRequest):
             "created_at": datetime.utcnow()
         }
 
-        await insert_conversation_metadata(metadata)
+        # await insert_conversation_metadata(metadata)
+        insert_conversation_metadata(metadata)
 
         return result
 
@@ -1992,27 +1999,6 @@ async def websocket_audio_endpoint(client_websocket: WebSocket):
     except Exception as e:
         print(f"[CLIENT WS] Unexpected error in WebSocket handler: {e}")
         
-# Serve index.html at root
-# @lct_app.get("/")
-# def read_root():
-#     return FileResponse("frontend_dist/index.html")
-
-# # Serve favicon or other top-level static files
-# @lct_app.get("/favicon.ico")
-# def favicon():
-#     file_path = "frontend_dist/favicon.ico"
-#     if os.path.exists(file_path):
-#         return FileResponse(file_path)
-#     return {}
-
-# # Catch-all for SPA routes (NOT static files)
-# @lct_app.get("/{full_path:path}")
-# async def spa_router(full_path: str):
-#     file_path = f"frontend_dist/{full_path}"
-#     if os.path.exists(file_path):
-#         return FileResponse(file_path)
-#     return FileResponse("frontend_dist/index.html")
-
 @lct_app.post("/fact_check_claims/", response_model=ClaimsResponse)
 async def fact_check_claims_call(request: FactCheckRequest):
     try:
@@ -2029,6 +2015,28 @@ async def fact_check_claims_call(request: FactCheckRequest):
         raise http_err
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+# Serve index.html at root
+@lct_app.get("/")
+def read_root():
+    return FileResponse("frontend_dist/index.html")
+
+# Serve favicon or other top-level static files
+@lct_app.get("/favicon.ico")
+def favicon():
+    file_path = "frontend_dist/favicon.ico"
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    return {}
+
+# Catch-all for SPA routes (NOT static files)
+@lct_app.get("/{full_path:path}")
+async def spa_router(full_path: str):
+    file_path = f"frontend_dist/{full_path}"
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    return FileResponse("frontend_dist/index.html")
+
 
 # @lct_app.post("/save_fact_check/")
 # async def save_fact_check_call(request: SaveFactCheckRequest):

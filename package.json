@@ -6,8 +6,5 @@
   },
   "devDependencies": {
     "concurrently": "^8.0.0"
-  },
-  "dependencies": {
-    "reconnecting-websocket": "^4.4.0"
   }
 }

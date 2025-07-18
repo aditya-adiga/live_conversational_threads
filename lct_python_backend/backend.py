@@ -23,8 +23,8 @@ from datetime import datetime
 # from db_helpers import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
 # from lct_python_backend.db import db
 # from lct_python_backend.db_helpers import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
-from firestore_db import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
-# from lct_python_backend.firestore_db import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
+# from firestore_db import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
+from lct_python_backend.firestore_db import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
 # from contextlib import asynccontextmanager
 # from dotenv import load_dotenv
 
@@ -68,7 +68,7 @@ lct_app.add_middleware(
 )
 
 # Serve JS/CSS/assets from Vite build folder
-# lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
+lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
 
 
 
@@ -909,7 +909,7 @@ Jordan: Sounds good. I’ll document the ChatGPT, AWS, and Stripe updates in our
 
             except json.JSONDecodeError as e:
                 print(f"[INFO]: [Attempt {attempt+1}] JSON decoding failed: {e}")
-                print(f"[INFO]: [Raw response]:\n{full_response}")
+                # print(f"[INFO]: [Raw response]:\n{full_response}")
 
         except Exception as e:
             print(f"[INFO]: [Attempt {attempt+1}] Unexpected error: {e}")
@@ -1041,7 +1041,7 @@ Evaluation Notes:
                 return json.loads(full_response)
             except json.JSONDecodeError as e:
                 print(f"[INFO]: [Attempt {attempt+1}] JSON decoding failed: {e}")
-                print(f"[INFO]: [Raw Gemini output]:\n{full_response}")
+                # print(f"[INFO]: [Raw Gemini output]:\n{full_response}")
 
         except Exception as e:
             print(f"[INFO]: [Attempt {attempt+1}] Unexpected error: {e}")
@@ -1689,8 +1689,6 @@ async def save_json_call(request: SaveJsonRequest):
 
         # Insert metadata into DB
         number_of_nodes = len(request.graph_data[0]) if request.graph_data and isinstance(request.graph_data[0], list) else 0
-        print("graph data check: ", request.graph_data)
-        print("number of nodes: ", len(request.graph_data[0]) if request.graph_data and isinstance(request.graph_data[0], list) else 0)
         metadata = {
             "id": result["file_id"],
             "file_name": result["file_name"],
@@ -1755,14 +1753,20 @@ async def generate_formalism_call(request: generateFormalismRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
     
+# Global state to persist across WebSocket connections
+global_shared_state = {
+    "accumulator": [],
+    "existing_json": [],
+    "chunk_dict": {},
+    "connection_state": "active",  # "active", "client_closed", "aai_failed"
+    "aai_ws": None,
+}
+
 @lct_app.websocket("/ws/audio")
 async def websocket_audio_endpoint(client_websocket: WebSocket):
 
-    shared_state = {
-                    "accumulator": [],
-                    "existing_json": [],
-                    "chunk_dict": {},
-                }
+    # Use global state instead of creating new one
+    shared_state = global_shared_state
     
     async def should_continue_processing(text_batch, stop_accumulating_flag= False):
         # Replace with your actual decision logic or API call
@@ -1793,8 +1797,8 @@ async def websocket_audio_endpoint(client_websocket: WebSocket):
             segmented_input_chunk = ' '.join(text_batch)
             incomplete_seg= ''
         
-        print(f"[INFO]: segmented input: {segmented_input_chunk}")
-        print(f"[INFO]: detected threads: {accumulated_output['detected_threads']}")
+        # print(f"[INFO]: segmented input: {segmented_input_chunk}")
+        # print(f"[INFO]: detected threads: {accumulated_output['detected_threads']}")
         
         #sending graph stuff to front end
         if segmented_input_chunk.strip():
@@ -1831,6 +1835,11 @@ async def websocket_audio_endpoint(client_websocket: WebSocket):
     async def receive_from_client(client_websocket, aai_ws, shared_state):
         while True:
             try:
+                # Check if connection should be closed
+                if shared_state["connection_state"] != "active":
+                    print(f"[INFO]: Connection state is {shared_state['connection_state']}, stopping client message processing")
+                    return
+                    
                 message = await client_websocket.receive()
 
                 if "bytes" in message:
@@ -1850,6 +1859,39 @@ async def websocket_audio_endpoint(client_websocket: WebSocket):
                         if msg.get("type") == "client_log":
                             print(f"[INFO]: [Client Log] {msg['message']}")
                             
+                        # Handle graph data updates from frontend
+                        elif msg.get("type") == "graph_data_update":
+                            print("[INFO]: Received graph data update from frontend")
+                            # print(f"[INFO]: Received data: {msg['data']}")
+                            # print(f"[INFO]: Type of received data: {type(msg['data'])}")
+                            # print(f"[INFO]: Length of received data: {len(msg['data']) if msg['data'] else 'undefined'}")
+                            if "data" in msg:
+                                shared_state["existing_json"] = msg["data"]
+                                print(f"[INFO]: Updated existing_json with {len(msg['data'])} nodes")
+                                
+                                # Now send the updated state back to frontend
+                                print("[INFO]: Sending updated state back to frontend")
+                                await client_websocket.send_text(json.dumps({
+                                    "type": "existing_json",
+                                    "data": [shared_state["existing_json"]]
+                                }))
+                                print("[INFO]: Sent updated graph data to frontend")
+                            
+                        # Handle chunk dictionary updates from frontend
+                        elif msg.get("type") == "chunk_dict_update":
+                            print("[INFO]: Received chunk dictionary update from frontend")
+                            if "data" in msg:
+                                shared_state["chunk_dict"] = msg["data"]
+                                print(f"[INFO]: Updated chunk_dict with {len(msg['data'])} chunks")
+                                
+                                # Send the updated chunk dict back to frontend
+                                await asyncio.sleep(0.02)  # 20ms pause
+                                await client_websocket.send_text(json.dumps({
+                                    "type": "chunk_dict",
+                                    "data": shared_state["chunk_dict"]
+                                }))
+                                print("[INFO]: Sent updated chunk dictionary to frontend")
+                            
                         # if msg.get("type") == "ping":
                         #     print("recieved ping")
                             # return 
@@ -1857,6 +1899,16 @@ async def websocket_audio_endpoint(client_websocket: WebSocket):
                         # final flush
                         if msg.get("final_flush"):
                             print("[INFO]: Final flush requested by client.")
+                            shared_state["connection_state"] = "client_closed"
+                            
+                            # Close AssemblyAI connection if it exists
+                            if shared_state["aai_ws"]:
+                                try:
+                                    await shared_state["aai_ws"].close()
+                                    print("[INFO]: AssemblyAI connection closed due to client manual close")
+                                except Exception as e:
+                                    print(f"[INFO]: Error closing AssemblyAI connection: {e}")
+                            
                             if shared_state["accumulator"]:
                                 try:
                                     await should_continue_processing(shared_state["accumulator"], stop_accumulating_flag=True)
@@ -1879,10 +1931,14 @@ async def websocket_audio_endpoint(client_websocket: WebSocket):
 
             except WebSocketDisconnect:
                 print("[INFO]: WebSocket client disconnected.")
+                shared_state["connection_state"] = "client_closed"
                 break
             
             except Exception as e:
                 print(f"[INFO]: Error receiving from client: {e}")
+                if shared_state["connection_state"] != "active":
+                    print(f"[INFO]: Client error occurred after connection state change to {shared_state['connection_state']}")
+                    return
                 raise
         
     async def receive_from_assemblyai(aai_ws, client_websocket, shared_state):
@@ -1890,6 +1946,11 @@ async def websocket_audio_endpoint(client_websocket: WebSocket):
         continue_accumulating = True
         while True:
             try:
+                # Check if connection should be closed
+                if shared_state["connection_state"] != "active":
+                    print(f"[INFO]: Connection state is {shared_state['connection_state']}, stopping AssemblyAI processing")
+                    return
+                    
                 msg = await aai_ws.recv()
                 msg = json.loads(msg)
                 msg_type = msg.get("message_type")
@@ -1940,28 +2001,59 @@ async def websocket_audio_endpoint(client_websocket: WebSocket):
                         "detail": f"AssemblyAI error: {error_msg}"
                     }))
                     return 
-            # except ConnectionClosedError:
-            #     print("AssemblyAI WebSocket closed.")
-            #     break
+            except ConnectionClosedError:
+                print("[INFO]: AssemblyAI WebSocket closed.")
+                if shared_state["connection_state"] == "client_closed":
+                    print("[INFO]: AssemblyAI closed due to client manual close")
+                else:
+                    print("[INFO]: AssemblyAI closed unexpectedly, will attempt reconnection")
+                break
             except Exception as e:
                 print(f"[INFO]: Error receiving from AssemblyAI: {e}")
+                if shared_state["connection_state"] != "active":
+                    print(f"[INFO]: AssemblyAI error occurred after connection state change to {shared_state['connection_state']}")
+                    return
                 raise
-
 
     try:
         await client_websocket.accept()
         print("[CLIENT WS] WebSocket connection accepted")
         
+        # Reset connection state for new connection, but preserve data
+        shared_state["connection_state"] = "active"
+        shared_state["aai_ws"] = None
+        
+        # Track if this is a reconnection
+        is_reconnection = False
+        
+        # Don't send existing data immediately - wait for frontend to send its current state first
+        print(f"[CLIENT WS] Current shared_state - existing_json: {len(shared_state['existing_json']) if shared_state['existing_json'] else 0} nodes, chunk_dict: {len(shared_state['chunk_dict']) if shared_state['chunk_dict'] else 0} chunks")
+        print("[CLIENT WS] Waiting for frontend to send its current state before sending backend data")
+        
         for attempt in range(3):
             print(f"[AAI WS] Attempt {attempt + 1}/3: Connecting to AssemblyAI...")
+            
             try:
                 async with websockets.connect(
                     ASSEMBLYAI_WS_URL,
                     additional_headers={"Authorization": ASSEMBLYAI_API_KEY}
                 ) as aai_ws:
                     print("[AAI WS] Connected to AssemblyAI")
+                    shared_state["aai_ws"] = aai_ws
                     
-                    
+                    # Check if client was closed during connection attempt
+                    if shared_state["connection_state"] != "active":
+                        print(f"[INFO]: Connection state is {shared_state['connection_state']} during AssemblyAI connection attempt")
+                        return
+
+                    # If this is a reconnection, close the old AssemblyAI connection first
+                    if is_reconnection:
+                        print("[INFO]: Reconnection detected - closing old AssemblyAI connection")
+                        try:
+                            if shared_state["aai_ws"] and shared_state["aai_ws"] != aai_ws:
+                                await shared_state["aai_ws"].close()
+                        except Exception as e:
+                            print(f"[INFO]: Error closing old AssemblyAI connection: {e}")
 
                     tasks = [
                         asyncio.create_task(receive_from_client(client_websocket, aai_ws, shared_state)),
@@ -1978,21 +2070,41 @@ async def websocket_audio_endpoint(client_websocket: WebSocket):
                             task.cancel()
                         await asyncio.gather(*tasks, return_exceptions=True)
                         print("[CLIENT WS] All tasks cleaned up")
+                        
+                        # Check if connection should be closed
+                        if shared_state["connection_state"] != "active":
+                            print(f"[INFO]: Connection state is {shared_state['connection_state']}, stopping AssemblyAI connection attempts")
+                            return
+                        
+                        # If we reach here, it means the client disconnected but we should try to reconnect
+                        is_reconnection = True
+                        print("[INFO]: Client disconnected, attempting reconnection...")
+                        continue
 
             except ConnectionClosedError as aai_err:
                 print(f"[AAI WS] Connection closed unexpectedly: {aai_err}")
+                if shared_state["connection_state"] != "active":
+                    print(f"[INFO]: Connection state is {shared_state['connection_state']}, stopping AssemblyAI connection attempts")
+                    return
             except Exception as aai_err:
                 print(f"[AAI WS] Error during setup: {aai_err}")
+                if shared_state["connection_state"] != "active":
+                    print(f"[INFO]: Connection state is {shared_state['connection_state']}, stopping AssemblyAI connection attempts")
+                    return
                 await asyncio.sleep(1)
         
-        else:
+        # If we reach here, we've exhausted all AssemblyAI connection attempts
+        if shared_state["connection_state"] == "active":
+            print("[CLIENT WS] Max AssemblyAI connection attempts (3) reached. Closing client socket.")
+            shared_state["connection_state"] = "aai_failed"
             await client_websocket.send_text(json.dumps({
                 "type": "error",
-                "detail": "Could not connect to transcription service"
+                "detail": "Could not connect to transcription service after multiple attempts"
             }))
             await asyncio.sleep(0.5)
             await client_websocket.close(code=1011)
-            print("[CLIENT WS] Max retries reached. Closing client socket.")
+        else:
+            print(f"[INFO]: Connection state is {shared_state['connection_state']}, no need to send error message")
 
     except asyncio.CancelledError:
         print("[CLIENT WS] WebSocket handler cancelled during shutdown")
@@ -2017,25 +2129,25 @@ async def fact_check_claims_call(request: FactCheckRequest):
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 # Serve index.html at root
-# @lct_app.get("/")
-# def read_root():
-#     return FileResponse("frontend_dist/index.html")
+@lct_app.get("/")
+def read_root():
+    return FileResponse("frontend_dist/index.html")
 
-# # Serve favicon or other top-level static files
-# @lct_app.get("/favicon.ico")
-# def favicon():
-#     file_path = "frontend_dist/favicon.ico"
-#     if os.path.exists(file_path):
-#         return FileResponse(file_path)
-#     return {}
+# Serve favicon or other top-level static files
+@lct_app.get("/favicon.ico")
+def favicon():
+    file_path = "frontend_dist/favicon.ico"
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    return {}
 
-# # Catch-all for SPA routes (NOT static files)
-# @lct_app.get("/{full_path:path}")
-# async def spa_router(full_path: str):
-#     file_path = f"frontend_dist/{full_path}"
-#     if os.path.exists(file_path):
-#         return FileResponse(file_path)
-#     return FileResponse("frontend_dist/index.html")
+# Catch-all for SPA routes (NOT static files)
+@lct_app.get("/{full_path:path}")
+async def spa_router(full_path: str):
+    file_path = f"frontend_dist/{full_path}"
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    return FileResponse("frontend_dist/index.html")
 
 
 # @lct_app.post("/save_fact_check/")

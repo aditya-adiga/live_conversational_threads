@@ -20,6 +20,7 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
 
   const fileNameWasReset = useRef(false);
   const manualCloseRef   = useRef(false);
+  const hasStartedRecording = useRef(false);
 
   useEffect(() => {
     if (
@@ -168,14 +169,22 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
   }
 
   const startRecording = async () => {
-    // clear the previous graph and chunk
-    onDataReceived?.([]);
-    onChunksReceived?.({}); 
-    //reset filename
-    setFileName?.("");
-    fileNameWasReset.current = true;
-    //setting conversation ID
-    setConversationId?.(crypto.randomUUID());
+    // Check if this is a manual start (not a reconnection)
+    const isReconnection = hasStartedRecording.current;
+    // Only clear the previous graph and chunk if this is NOT a reconnection
+    if (!isReconnection) {
+      console.log("[AUDIO] Manual start detected - clearing previous data");
+      onDataReceived?.([]);
+      onChunksReceived?.({}); 
+      //reset filename
+      setFileName?.("");
+      fileNameWasReset.current = true;
+      //setting conversation ID
+      setConversationId?.(crypto.randomUUID());
+      hasStartedRecording.current = true;
+    } else {
+      console.log("[AUDIO] Reconnection detected - preserving existing data");
+    }
     // Open microphone
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
@@ -212,6 +221,28 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
       console.log("[WEBSOCKET] Connection opened successfully");
       setRecording(true);
       logToServer(`AudioContext requested at 16000Hz, actual: ${audioContextRef.current.sampleRate}Hz`); // logging
+      
+      if (hasStartedRecording.current && graphData && graphData[0] && graphData[0].length > 0) {
+        console.log("[WEBSOCKET] Reconnection detected - sending existing graph data to backend");
+        ws.send(JSON.stringify({ 
+          type: "graph_data_update", 
+          data: graphData 
+        }));
+        console.log("[WEBSOCKET] Graph data sent successfully");
+      } else {
+        console.log("[WEBSOCKET] Not sending graph data - conditions not met");
+      }
+      
+      if (hasStartedRecording.current && chunkDict && Object.keys(chunkDict).length > 0) {
+        console.log("[WEBSOCKET] Reconnection detected - sending existing chunk dictionary to backend");
+        ws.send(JSON.stringify({ 
+          type: "chunk_dict_update", 
+          data: chunkDict 
+        }));
+        console.log("[WEBSOCKET] Chunk dict sent successfully");
+      } else {
+        console.log("[WEBSOCKET] Not sending chunk dict - conditions not met");
+      }
 
   //     // Start ping interval
   // pingIntervalRef.current = setInterval(() => {
@@ -230,11 +261,15 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
         const message = JSON.parse(event.data);
     
         if (message.type === "existing_json") {
+          console.log("[WEBSOCKET] Received existing_json from backend:", message.data);
+          console.log("[WEBSOCKET] Type of received data:", typeof message.data);
           graphDataFromSocket.current = true; // Set flag before updating state
           onDataReceived?.(message.data);
         }
       
         if (message.type === "chunk_dict") {
+          console.log("[WEBSOCKET] Received chunk_dict from backend:", message.data);
+          console.log("[WEBSOCKET] Type of received chunk data:", typeof message.data);
           onChunksReceived?.(message.data);
         }
         console.log("Chunk Dict:", message.data);
@@ -299,6 +334,7 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
 
   const stopRecording = () => {
     manualCloseRef.current = true;
+    hasStartedRecording.current = false; // Reset flag for next manual start
     
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
   

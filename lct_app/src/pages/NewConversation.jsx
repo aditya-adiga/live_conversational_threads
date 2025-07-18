@@ -29,11 +29,18 @@ export default function NewConversation() {
 
   // Handles streamed JSON data
   const handleDataReceived = (newData) => {
-    setGraphData(newData);
+    if (graphData.length > 0 && newData.length > 0) {
+      // During reconnection, preserve frontend data and don't replace with backend data
+      console.log("[FRONTEND] Reconnection detected - preserving existing graph data, ignoring backend data");
+    } else {
+      console.log("[FRONTEND] Received new graph data");
+      setGraphData(newData);
+    }
   };
 
   // Handles received chunks
   const handleChunksReceived = (chunks) => {
+    console.log("[FRONTEND] Received updated chunk dictionary");
     setChunkDict(chunks);
   };
 

@@ -23,8 +23,8 @@ from datetime import datetime
 # from db_helpers import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
 # from lct_python_backend.db import db
 # from lct_python_backend.db_helpers import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
-# from firestore_db import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
-from lct_python_backend.firestore_db import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
+from firestore_db import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
+# from lct_python_backend.firestore_db import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
 # from contextlib import asynccontextmanager
 # from dotenv import load_dotenv
 
@@ -68,7 +68,7 @@ lct_app.add_middleware(
 )
 
 # Serve JS/CSS/assets from Vite build folder
-lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
+# lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
 
 
 
@@ -2017,25 +2017,25 @@ async def fact_check_claims_call(request: FactCheckRequest):
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 # Serve index.html at root
-@lct_app.get("/")
-def read_root():
-    return FileResponse("frontend_dist/index.html")
+# @lct_app.get("/")
+# def read_root():
+#     return FileResponse("frontend_dist/index.html")
 
-# Serve favicon or other top-level static files
-@lct_app.get("/favicon.ico")
-def favicon():
-    file_path = "frontend_dist/favicon.ico"
-    if os.path.exists(file_path):
-        return FileResponse(file_path)
-    return {}
+# # Serve favicon or other top-level static files
+# @lct_app.get("/favicon.ico")
+# def favicon():
+#     file_path = "frontend_dist/favicon.ico"
+#     if os.path.exists(file_path):
+#         return FileResponse(file_path)
+#     return {}
 
-# Catch-all for SPA routes (NOT static files)
-@lct_app.get("/{full_path:path}")
-async def spa_router(full_path: str):
-    file_path = f"frontend_dist/{full_path}"
-    if os.path.exists(file_path):
-        return FileResponse(file_path)
-    return FileResponse("frontend_dist/index.html")
+# # Catch-all for SPA routes (NOT static files)
+# @lct_app.get("/{full_path:path}")
+# async def spa_router(full_path: str):
+#     file_path = f"frontend_dist/{full_path}"
+#     if os.path.exists(file_path):
+#         return FileResponse(file_path)
+#     return FileResponse("frontend_dist/index.html")
 
 
 # @lct_app.post("/save_fact_check/")

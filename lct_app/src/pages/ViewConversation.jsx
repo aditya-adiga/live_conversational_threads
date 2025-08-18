@@ -33,13 +33,48 @@ useEffect(() => {
   fetch(`${API_URL}/conversations/${conversationId}`)
     .then((res) => res.json())
     .then((data) => {
-      if (data.graph_data) setGraphData(data.graph_data);
+      if (data.graph_data) {
+        setGraphData((prevGraphData) => {
+          // If no previous data, just use new data
+          if (!prevGraphData || prevGraphData.length === 0) {
+            return data.graph_data;
+          }
+
+          // Merge new data with existing user annotations
+          return mergeGraphDataWithUserAnnotations(prevGraphData, data.graph_data);
+        });
+      }
       if (data.chunk_dict) setChunkDict(data.chunk_dict);
     })
     .catch((err) => {
       console.error("Failed to load conversation:", err);
     });
 }, [conversationId]);
+
+// Helper function to preserve user annotations when receiving backend updates
+const mergeGraphDataWithUserAnnotations = (currentData, incomingData) => {
+  if (!incomingData || incomingData.length === 0) return currentData;
+  
+  return incomingData.map((incomingChunk, chunkIndex) => {
+    const currentChunk = currentData[chunkIndex] || [];
+    
+    return incomingChunk.map((incomingNode) => {
+      const currentNode = currentChunk.find(node => node.node_name === incomingNode.node_name);
+      
+      if (currentNode) {
+        // Preserve user annotations from current node
+        return {
+          ...incomingNode,
+          is_contextual_progress: currentNode.is_contextual_progress || incomingNode.is_contextual_progress,
+          is_bookmark: currentNode.is_bookmark || incomingNode.is_bookmark,
+          claims_checked: currentNode.claims_checked || incomingNode.claims_checked,
+        };
+      }
+      
+      return incomingNode;
+    });
+  });
+};
 
 useEffect(() => {
   setIsFullScreen(true); // Trigger fullscreen on load
@@ -55,7 +90,7 @@ useEffect(() => {
             onClick={() => navigate("/browse")}
             className="px-4 py-2 h-10 bg-white text-blue-600 font-semibold rounded-lg shadow hover:bg-blue-100 transition text-sm md:text-base"
           >
-            ⬅ Back
+            ⬅ Exit
           </button>
         </div>
 

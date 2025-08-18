@@ -23,7 +23,7 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
     if (
       fileNameWasReset.current &&
       graphData &&
-      graphData !== lastAutoSaveRef.current.graphData && // 🛡 ensure it's "new"
+      graphData !== lastAutoSaveRef.current.graphData && 
       graphData?.[0]?.[0]?.node_name
     ) {
       const initialName = graphData[0][0].node_name.replace(/[/:*?"<>|]/g, "");

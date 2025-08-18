@@ -28,7 +28,40 @@ export default function NewConversation() {
 
   // Handles streamed JSON data
   const handleDataReceived = (newData) => {
-    setGraphData(newData);
+    setGraphData((prevGraphData) => {
+      // If no previous data, just use new data
+      if (!prevGraphData || prevGraphData.length === 0) {
+        return newData;
+      }
+
+      // Merge new data with existing user annotations
+      return mergeGraphDataWithUserAnnotations(prevGraphData, newData);
+    });
+  };
+
+  // Helper function to preserve user annotations when receiving backend updates
+  const mergeGraphDataWithUserAnnotations = (currentData, incomingData) => {
+    if (!incomingData || incomingData.length === 0) return currentData;
+    
+    return incomingData.map((incomingChunk, chunkIndex) => {
+      const currentChunk = currentData[chunkIndex] || [];
+      
+      return incomingChunk.map((incomingNode) => {
+        const currentNode = currentChunk.find(node => node.node_name === incomingNode.node_name);
+        
+        if (currentNode) {
+          // Preserve user annotations from current node
+          return {
+            ...incomingNode,
+            is_contextual_progress: currentNode.is_contextual_progress || incomingNode.is_contextual_progress,
+            is_bookmark: currentNode.is_bookmark || incomingNode.is_bookmark,
+            claims_checked: currentNode.claims_checked || incomingNode.claims_checked,
+          };
+        }
+        
+        return incomingNode;
+      });
+    });
   };
 
   // Handles received chunks
@@ -48,7 +81,7 @@ export default function NewConversation() {
             onClick={() => navigate("/")}
             className="px-4 py-2 h-10 bg-white text-blue-600 font-semibold rounded-lg shadow hover:bg-blue-100 transition text-sm md:text-base"
           >
-            ⬅ Back
+            ⬅ Exit
           </button>
         </div>
 
@@ -154,23 +187,21 @@ export default function NewConversation() {
         </div>
       )}
       
-      {!isFormalismView && (
-        <>
-          {/* Audio Input Section */}
-          <div className="sticky bottom-0 w-full p-4 flex justify-center z-20">
-          <AudioInput
-            onDataReceived={handleDataReceived}
-            onChunksReceived={handleChunksReceived}
-            chunkDict={chunkDict}
-            graphData={graphData}
-            conversationId={conversationId}
-            setConversationId={setConversationId}
-            setMessage={setMessage}
-            message={message}
-            fileName={fileName}
-            setFileName={setFileName}
-          />
-          </div>
+      {/* Audio Input Section - Always visible */}
+      <div className="sticky bottom-0 w-full p-4 flex justify-center z-20">
+        <AudioInput
+          onDataReceived={handleDataReceived}
+          onChunksReceived={handleChunksReceived}
+          chunkDict={chunkDict}
+          graphData={graphData}
+          conversationId={conversationId}
+          setConversationId={setConversationId}
+          setMessage={setMessage}
+          message={message}
+          fileName={fileName}
+          setFileName={setFileName}
+        />
+      </div>
 
           {/* Save Transcript Button Below Audio Input */}
           {graphData.length > 0 && (
@@ -187,11 +218,11 @@ export default function NewConversation() {
             </div>
           )}
 
-          {/* Legend */}
-          <div className="hidden md:block absolute bottom-4 right-4">
-            <Legend />
-          </div>
-        </>
+      {/* Legend - Only show in non-formalism view */}
+      {!isFormalismView && (
+        <div className="hidden md:block absolute bottom-4 right-4">
+          <Legend />
+        </div>
       )}
     </div>
   );

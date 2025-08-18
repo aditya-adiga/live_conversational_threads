@@ -9,6 +9,7 @@ import SaveTranscript from "../components/SaveTranscript";
 import Legend from "../components/Legend";
 import GenerateFormalism from "../components/GenerateFormalism";
 import FormalismList from "../components/FormalismList";
+import LoopyEditor from "../components/LoopyEditor";
 
 export default function NewConversation() {
   const [graphData, setGraphData] = useState([]); // Stores graph data
@@ -172,17 +173,7 @@ export default function NewConversation() {
               Formalism Model Diagram
             </h2>
 
-            <div className="flex-1 flex items-center justify-center">
-              <button
-                onClick={() => {
-                  const url = selectedLoopyURL || "https://ncase.me/loopy/";
-                  window.open(url, "_blank");
-                }}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition-colors"
-              >
-                {selectedLoopyURL ? "View Model" : "Open Loopy Editor"}
-              </button>
-            </div>
+            <LoopyEditor selectedLoopyURL={selectedLoopyURL} />
           </div>
         </div>
       )}

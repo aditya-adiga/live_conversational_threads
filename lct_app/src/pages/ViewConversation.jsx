@@ -9,7 +9,8 @@ import SaveTranscript from "../components/SaveTranscript";
 import Legend from "../components/Legend";
 import GenerateFormalism from "../components/GenerateFormalism";
 import FormalismList from "../components/FormalismList";
-import LoopyEditor from "../components/LoopyEditor";
+import FormalismCanvas from "../components/FormalismCanvas";
+import AuthButton from "../components/AuthButton";
 
 export default function ViewConversation() {
   const [graphData, setGraphData] = useState([]); // Stores graph data
@@ -19,6 +20,8 @@ export default function ViewConversation() {
   const [selectedFormalism, setSelectedFormalism] = useState(null); // stores selected formalism
   const [formalismData, setFormalismData] = useState({}); // Stores Formalism data
   const [selectedLoopyURL, setSelectedLoopyURL] = useState(""); // Stores Loopy URL
+  const [selectedFormalismProof, setSelectedFormalismProof] = useState(""); // Stores Formalism Proof
+
   // const [message, setMessage] = useState(""); // message for saving conversation
   const [isFullScreen, setIsFullScreen] = useState(false); // full screen status
 
@@ -84,7 +87,7 @@ useEffect(() => {
   return (
     <div className="flex flex-col h-screen w-screen bg-gradient-to-br from-blue-500 to-purple-600 text-white">
       {/* Header */}
-      <div className="w-full px-4 py-4 bg-transparent flex flex-row justify-between items-start md:grid md:grid-cols-3 md:items-center gap-2">
+      <div className="w-full px-4 py-4 bg-transparent flex flex-row justify-between items-start md:grid md:grid-cols-4 md:items-center gap-2">
         {/* Left: Back Button */}
         <div className="w-full md:w-auto flex justify-start">
           <button
@@ -96,7 +99,7 @@ useEffect(() => {
         </div>
 
         {/* Center: GenerateFormalism Buttons */}
-        <div className="w-full md:w-auto flex justify-end md:justify-center">
+        <div className="w-full md:w-auto flex justify-end md:justify-center md:col-span-2">
           <div className="flex flex-col md:flex-row items-end md:items-center gap-2">
             <GenerateFormalism
               chunkDict={chunkDict}
@@ -109,12 +112,16 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* Right: Save Transcript (desktop only) */}
-        {graphData.length > 0 && (
-          <div className="hidden md:flex justify-end w-full">
-            <SaveTranscript chunkDict={chunkDict} />
-          </div>
-        )}
+        {/* Right: Auth Button and Save Transcript */}
+        <div className="hidden md:flex justify-end w-full items-center gap-2">
+          {graphData.length > 0 && <SaveTranscript chunkDict={chunkDict} />}
+          <AuthButton />
+        </div>
+
+        {/* Mobile: Auth Button */}
+        <div className="md:hidden flex-shrink-0">
+          <AuthButton />
+        </div>
       </div>
 
       {!isFormalismView ? (
@@ -157,8 +164,8 @@ useEffect(() => {
                 selectedFormalism={selectedFormalism}
                 setSelectedFormalism={setSelectedFormalism}
                 formalismData={formalismData}
-                setFormalismData={setFormalismData}
                 setSelectedLoopyURL={setSelectedLoopyURL}
+                setSelectedFormalismProof={setSelectedFormalismProof}
               />
             </div>
 
@@ -177,13 +184,10 @@ useEffect(() => {
           </div>
 
           {/* Bottom - Canvas */}
-          <div className="bg-white rounded-lg shadow-lg p-4 flex flex-col flex-grow">
-            <h2 className="text-xl font-bold text-gray-800 text-center mb-2">
-              Formalism Model Diagram
-            </h2>
-
-            <LoopyEditor selectedLoopyURL={selectedLoopyURL} />
-          </div>
+          <FormalismCanvas 
+            selectedLoopyURL={selectedLoopyURL}
+            selectedFormalismProof={selectedFormalismProof}
+          />
         </div>
       )}
 

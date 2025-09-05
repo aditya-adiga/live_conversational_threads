@@ -128,7 +128,7 @@ export default function GenerateFormalism({
       {isDialogOpen && (
         <div
           ref={dialogRef}
-          className="absolute top-[110%] right-0 bg-white text-black p-4 rounded-lg shadow-xl border w-[90vw] sm:w-[24rem] max-h-[70vh] overflow-auto z-20"
+          className="absolute top-[110%] left-1/2 transform -translate-x-1/2 sm:left-auto sm:right-0 sm:transform-none sm:translate-x-0 bg-white text-black p-4 rounded-lg shadow-xl border w-[90vw] sm:w-[24rem] max-w-[350px] max-h-[70vh] overflow-auto z-80"
         >
           <h2 className="text-lg font-bold mb-3">
             Enter your research interests

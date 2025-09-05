@@ -166,3 +166,4 @@ ENV/
 # Project specific
 /saved_json/
 /prompts_and_transcripts/
+/notebooks/

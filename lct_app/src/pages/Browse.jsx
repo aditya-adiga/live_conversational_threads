@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import AuthButton from "../components/AuthButton";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -48,13 +49,18 @@ export default function Browse() {
           onClick={() => navigate("/")}
           className="px-4 py-2 bg-white text-blue-600 font-semibold rounded-lg shadow hover:bg-blue-100 transition text-sm md:text-base"
         >
-          ⬅ Back
+          ⬅ Exit
         </button>
 
         {/* Title */}
         <h1 className="text-xl md:text-3xl font-bold text-center flex-grow">
           Saved Conversations
         </h1>
+
+        {/* Auth Button */}
+        <div className="flex-shrink-0">
+          <AuthButton />
+        </div>
       </div>
       {/* <h2 className="text-3xl font-bold mb-6 text-center">Saved Conversations</h2> */}
 

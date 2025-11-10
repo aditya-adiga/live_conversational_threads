@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import ImportCanvas from "../components/ImportCanvas";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -55,6 +56,11 @@ export default function Browse() {
         <h1 className="text-xl md:text-3xl font-bold text-center flex-grow">
           Saved Conversations
         </h1>
+
+        {/* Import Canvas Button */}
+        <div className="hidden md:block">
+          <ImportCanvas />
+        </div>
       </div>
       {/* <h2 className="text-3xl font-bold mb-6 text-center">Saved Conversations</h2> */}
 

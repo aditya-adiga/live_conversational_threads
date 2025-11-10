@@ -6,6 +6,7 @@ import StructuralGraph from "../components/StructuralGraph";
 import ContextualGraph from "../components/ContextualGraph";
 // import SaveJson from "../components/SaveJson";
 import SaveTranscript from "../components/SaveTranscript";
+import ExportCanvas from "../components/ExportCanvas";
 import Legend from "../components/Legend";
 import GenerateFormalism from "../components/GenerateFormalism";
 import FormalismList from "../components/FormalismList";
@@ -20,6 +21,7 @@ export default function ViewConversation() {
   const [selectedLoopyURL, setSelectedLoopyURL] = useState(""); // Stores Loopy URL
   // const [message, setMessage] = useState(""); // message for saving conversation
   const [isFullScreen, setIsFullScreen] = useState(false); // full screen status
+  const [conversationName, setConversationName] = useState(""); // Stores conversation name for export
 
 const { conversationId } = useParams();
 
@@ -30,6 +32,7 @@ const API_URL = import.meta.env.VITE_API_URL || "";
 useEffect(() => {
   if (!conversationId) return;
 
+  // Load conversation data
   fetch(`${API_URL}/conversations/${conversationId}`)
     .then((res) => res.json())
     .then((data) => {
@@ -38,6 +41,19 @@ useEffect(() => {
     })
     .catch((err) => {
       console.error("Failed to load conversation:", err);
+    });
+
+  // Load conversation metadata for name
+  fetch(`${API_URL}/conversations/`)
+    .then((res) => res.json())
+    .then((conversations) => {
+      const conversation = conversations.find((c) => c.id === conversationId);
+      if (conversation) {
+        setConversationName(conversation.file_name);
+      }
+    })
+    .catch((err) => {
+      console.error("Failed to load conversation metadata:", err);
     });
 }, [conversationId]);
 
@@ -73,10 +89,11 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* Right: Save Transcript (desktop only) */}
+        {/* Right: Export Actions (desktop only) */}
         {graphData.length > 0 && (
-          <div className="hidden md:flex justify-end w-full">
+          <div className="hidden md:flex justify-end w-full gap-2">
             <SaveTranscript chunkDict={chunkDict} />
+            <ExportCanvas graphData={graphData} fileName={conversationName} />
           </div>
         )}
       </div>

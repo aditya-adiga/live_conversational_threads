@@ -388,8 +388,208 @@ To prevent scope creep:
 
 ---
 
-**Questions for you**:
-1. ✅ Transcript format clear?
-2. ✅ Edit scope makes sense (nodes only)?
-3. ✅ Prompt-based clustering approach OK?
-4. ❓ Anything missing from Tier 1 that blocks implementation?
+## 11. Zoom Level Granularity (UPDATED)
+
+### ✅ DECIDED: Topic-Based Node Generation (NOT Time-Based)
+
+**Node granularity levels** (quantized into 3-4 discrete zoom levels):
+
+```
+Level 5 (EXTREME ZOOM IN): Sentence/word-level
+├─ Each sentence becomes a node
+├─ Can decompose further into word relationships
+└─ Show etymology, root words, linguistic structure
+
+Level 4 (FINE): Speaker turn-based
+├─ Each speaking turn becomes a node cluster
+└─ Decompose long monologues into sentences
+
+Level 3 (MEDIUM - DEFAULT): Topic shifts
+├─ AI detects semantic topic boundaries
+└─ This is the default view on import
+
+Level 2 (COARSE): Major themes
+├─ Related topics grouped into themes
+└─ Good for 30-60 min conversations
+
+Level 1 (EXTREME ZOOM OUT): Narrative arcs / Chapters
+├─ Conversation divided into major "acts"
+└─ Natural topic boundaries for pagination of long conversations (>2 hours)
+```
+
+**Implementation strategy**:
+- Pre-compute Levels 1-4 on import (cache results)
+- Compute Level 5 on-demand (expensive, rarely used)
+- Use AI to find natural "chapter" boundaries for >2 hour conversations
+
+**Why not time-based?**
+> "Time is just arbitrary objective numbers. What really matters is the rhythm of the conversation. We can use intelligence to handle that."
+
+---
+
+## 12. Node Detail Panel Architecture (UPDATED)
+
+### ✅ DECIDED: Split Screen with Zoom-Dependent Context
+
+**Layout**: Split screen (Option C)
+- Graph view on left
+- Detail panel on right
+- Works on tablets
+
+**Context display logic** (depends on zoom level):
+
+```python
+if zoom_level >= 0.8:  # Very zoomed in (sentence/word level)
+    # Show previous notes and context
+    display_context = {
+        "previous_nodes": 2,  # Show 2 nodes before
+        "next_nodes": 2,      # Show 2 nodes after
+        "mode": "detailed"
+    }
+elif zoom_level < 0.3:  # Very zoomed out (narrative arc level)
+    # Show summary of entire thread
+    display_context = {
+        "mode": "summary",
+        "summary_of": "entire_thread_arc"
+    }
+else:  # Medium zoom
+    # Show just this node's context
+    display_context = {
+        "mode": "focused",
+        "previous_nodes": 1,
+        "next_nodes": 1
+    }
+```
+
+**Detail panel sections** (stacked, collapsible):
+1. **Transcript & Context** (always visible)
+2. **Edges & Dependencies** (collapsible, shows mini-graph)
+3. **Factual Claims** (collapsible, extracted but not fact-checked yet)
+4. **Structural Issues** (collapsible, fallacy/bias detection - on-demand)
+
+### ✅ DECIDED: Edit Mode Toggle Required
+
+**UX Friction is intentional**:
+- User must explicitly click "Edit Mode" toggle to make changes
+- Prevents accidental edits
+- Clear separation between review and editing workflows
+
+---
+
+## 13. Dual-View Architecture (CRITICAL UPDATE)
+
+### ✅ DECIDED: Timeline + Contextual Views BOTH Visible (NOT Toggleable)
+
+**Layout**:
+```
+┌─────────────────────────────────────────┐
+│                                         │
+│      CONTEXTUAL VIEW (Top - Main)       │
+│   Network layout, semantic clusters     │
+│                                         │
+├─────────────────────────────────────────┤
+│ TIMELINE VIEW (Bottom - Thin Strip)    │
+│ [Node1]─→[Node2]─→[Node3]─→[Node4]     │
+└─────────────────────────────────────────┘
+```
+
+**How it works**:
+- **Timeline view** (bottom): Linear left-to-right chronological layout
+  - Shows temporal sequence (A → B → C)
+  - Thin strip, ~15% of screen height
+  - Only temporal edges visible
+
+- **Contextual view** (top): Network/cluster layout
+  - Shows semantic relationships (supports, contradicts, related_to)
+  - Main focus area, ~85% of screen height
+  - Force-directed or hierarchical layout
+
+- **Linked highlighting**: Click node in one view → highlights in both views
+- **1:1 correspondence**: Same nodes in both views, different layouts
+- **Zoom affects both**: Coarse-graining changes which nodes appear in both views simultaneously
+
+**Already partially implemented** in current codebase - extend this pattern!
+
+---
+
+## 14. User Answers to All Open Questions
+
+### Node Granularity
+✅ **Topic-based** (NOT time-based) with 5 discrete zoom levels
+
+### Node Detail Panel
+✅ **Split screen** layout, context depends on zoom level
+
+### Edit Mode
+✅ **Toggle required** (UX friction intentional)
+
+### Fallacy Detection
+✅ **On-demand** (not always running)
+✅ **Bidirectional feedback** (user can dismiss/override - critical for training)
+
+### Fact-Checking
+✅ **Extract claims only** (no auto fact-check for MVP)
+✅ Future: on-demand via Perplexity/other APIs
+
+### Normative Claims & Frames
+✅ **Future iteration**: Detect "Simulacra levels" and implicit frames
+✅ Example: "preserve light of consciousness" → sneaky normative claim
+✅ User will provide context document on Simulacra levels
+
+### Speaker Analytics
+✅ **Separate Analytics VIEW** (not sidebar)
+✅ Focus on: speaker roles (grounding, deconstructing, constructing)
+✅ Timestamp calculation: Option B (parse precisely)
+✅ Topic tagging: Use node summaries + few-shot prompting
+
+### Temporal vs Contextual Views
+✅ **Both visible simultaneously** (timeline at bottom, contextual on top)
+✅ NOT toggleable - always see both
+✅ Linked highlighting between views
+
+### Custom Edges
+✅ **3 standard types** for MVP: supports, contradicts, related_to
+✅ **Top 3 AI suggestions** per node (low opacity → user promotes)
+
+### Edit History
+✅ **Optional user notes** (not required)
+✅ **Visible in settings** (collapsible)
+✅ **Power users** can enable/disable all features
+
+---
+
+## 15. New Infrastructure Requirements
+
+### Prompts Configuration System
+- **JSON file** with all prompts (user-editable)
+- Settings page to modify prompts per API call
+- Version control for prompt changes
+- Few-shot examples for topic tagging
+
+### Instrumentation & Cost Tracking
+**Metrics to track** (per API call):
+- **Time taken** (latency in ms)
+- **Cost** (tokens used × model pricing)
+- **Model used** (e.g., GPT-4, Claude Sonnet)
+
+**Settings page features**:
+- Model selection dropdown
+- Credit limit warnings
+- Spending dashboard
+- Performance metrics graph
+
+---
+
+## 16. Updated Anti-Scope
+
+Adding to "What We're NOT Doing":
+
+- ❌ Auto fact-checking (future: on-demand only)
+- ❌ Simulacra level detection (future iteration after user provides context)
+- ❌ Sidebar analytics (using separate view instead)
+- ❌ Toggleable view switching (both views always visible)
+
+---
+
+**All Tier 1 questions answered ✅**
+**Ready to proceed with Tier 2 feature specs**

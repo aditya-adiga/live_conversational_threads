@@ -11,12 +11,14 @@ import PropTypes from 'prop-types';
 import { ReactFlowProvider } from 'reactflow';
 import TimelineView from './TimelineView';
 import ContextualNetworkView from './ContextualNetworkView';
+import { NodeDetailPanel } from '../NodeDetailPanel';
 import useZoomController from '../../hooks/useZoomController';
 import { ZoomControls } from '../ZoomControls';
 import {
   fetchGraph,
   transformNodesToReactFlow,
   transformEdgesToReactFlow,
+  saveNode,
 } from '../../services/graphApi';
 import 'reactflow/dist/style.css';
 
@@ -35,6 +37,27 @@ export default function DualViewCanvas({ conversationId }) {
   const [graphData, setGraphData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Node detail panel state (Week 7)
+  const [showDetailPanel, setShowDetailPanel] = useState(false);
+
+  // Show/hide panel when node is selected/deselected
+  useEffect(() => {
+    setShowDetailPanel(!!zoomController.selectedNode);
+  }, [zoomController.selectedNode]);
+
+  // Handle saving node changes
+  const handleSaveNode = async (nodeId, updatedNode, diff) => {
+    try {
+      await saveNode(nodeId, updatedNode, diff);
+      // Reload graph data to reflect changes
+      const data = await fetchGraph(conversationId, null, true);
+      setGraphData(data);
+    } catch (error) {
+      console.error('Failed to save node:', error);
+      throw error; // Re-throw to let NodeDetailPanel handle it
+    }
+  };
 
   // Load graph data from backend
   useEffect(() => {
@@ -213,6 +236,25 @@ export default function DualViewCanvas({ conversationId }) {
         <div className="flex gap-4">
           <span><kbd className="bg-white/20 px-2 py-1 rounded">Alt</kbd> + <kbd className="bg-white/20 px-2 py-1 rounded">←</kbd> / <kbd className="bg-white/20 px-2 py-1 rounded">→</kbd> History</span>
         </div>
+      </div>
+
+      {/* Node Detail Panel (Week 7) - Slide-in from right */}
+      <div
+        className={`absolute top-0 right-0 h-full w-96 transform transition-transform duration-300 ease-in-out z-50 ${
+          showDetailPanel ? 'translate-x-0' : 'translate-x-full'
+        }`}
+      >
+        {showDetailPanel && zoomController.selectedNode && (
+          <NodeDetailPanel
+            selectedNode={nodes.find(n => n.id === zoomController.selectedNode)}
+            allNodes={nodes}
+            edges={edges}
+            zoomLevel={zoomController.zoomLevel}
+            onClose={() => zoomController.setSelectedNode(null)}
+            onSave={handleSaveNode}
+            utterancesMap={{}}
+          />
+        )}
       </div>
     </div>
   );

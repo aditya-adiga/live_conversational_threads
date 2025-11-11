@@ -248,12 +248,44 @@ export function calculateZoomDistribution(nodes) {
   return distribution;
 }
 
+/**
+ * Save node changes to backend (Week 7)
+ * @param {string} nodeId - Node UUID
+ * @param {Object} updatedNode - Updated node data
+ * @param {Object} diff - Object containing changed fields
+ * @returns {Promise<Object>} Updated node data
+ */
+export async function saveNode(nodeId, updatedNode, diff) {
+  const url = `${API_BASE_URL}/api/nodes/${nodeId}`;
+
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      title: updatedNode.title,
+      summary: updatedNode.summary,
+      keywords: updatedNode.keywords,
+      changes: diff, // Include diff for edit history logging
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.detail || `Failed to save node: ${response.statusText}`);
+  }
+
+  return await response.json();
+}
+
 export default {
   fetchGraph,
   fetchNodes,
   fetchEdges,
   generateGraph,
   deleteGraph,
+  saveNode,
   transformNodesToReactFlow,
   transformEdgesToReactFlow,
   getZoomLevelName,

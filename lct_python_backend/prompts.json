@@ -1,0 +1,95 @@
+{
+  "version": "1.0.0",
+  "last_updated": "2025-11-11",
+  "description": "Prompts for Live Conversational Threads AI analysis",
+
+  "prompts": {
+    "initial_clustering": {
+      "description": "Generate initial topic-based nodes from transcript",
+      "model": "gpt-4",
+      "temperature": 0.5,
+      "max_tokens": 4000,
+      "template": "You are analyzing a conversation transcript to identify natural topic shifts and create a hierarchical graph structure.\n\nGiven the following conversation with {utterance_count} utterances from {participant_count} participants:\n\nParticipants: {participants}\n\nTranscript:\n{transcript}\n\nTask: Identify natural topic boundaries and create nodes at 5 different zoom levels:\n\n1. SENTENCE (Level 1): Individual important sentences or short exchanges\n2. TURN (Level 2): Speaker turns or complete thoughts\n3. TOPIC (Level 3): Distinct topics or sub-discussions (3-10 utterances)\n4. THEME (Level 4): Major themes or discussion areas (10-30 utterances)\n5. ARC (Level 5): Overall narrative arcs or meeting segments (30+ utterances)\n\nFor each node, provide:\n- title: Brief descriptive title (5-10 words)\n- summary: Concise summary of what was discussed\n- zoom_levels: Array of zoom levels where this node should be visible [1-5]\n- start_utterance: Index of first utterance (0-based)\n- end_utterance: Index of last utterance (0-based)\n- primary_speaker: Main speaker for this segment (if applicable)\n- keywords: 3-5 key terms or concepts\n\nReturn a JSON array of nodes. Ensure:\n- Good coverage across all 5 zoom levels\n- Nodes at higher zoom levels (4-5) encompass lower level nodes\n- Natural topic boundaries (don't split mid-thought)\n- Each utterance belongs to at least one node\n\nExample response:\n[\n  {\n    \"title\": \"Opening and Introductions\",\n    \"summary\": \"Team members greet each other and Alice opens the meeting\",\n    \"zoom_levels\": [3, 4, 5],\n    \"start_utterance\": 0,\n    \"end_utterance\": 5,\n    \"primary_speaker\": \"Alice\",\n    \"keywords\": [\"greeting\", \"introduction\", \"meeting start\"]\n  }\n]\n\nRespond with ONLY the JSON array, no other text.",
+
+      "few_shot_examples": [
+        {
+          "input": "Small 3-person conversation about project planning",
+          "expected_nodes": 5,
+          "expected_zoom_distribution": "Mostly levels 3-5, few at 1-2"
+        }
+      ]
+    },
+
+    "detect_contextual_relationships": {
+      "description": "Identify contextual/thematic relationships between nodes",
+      "model": "gpt-4",
+      "temperature": 0.3,
+      "max_tokens": 2000,
+      "template": "You are analyzing relationships between conversation topics.\n\nGiven these nodes from a conversation:\n\n{nodes_json}\n\nTask: Identify meaningful contextual relationships between nodes. These are NON-sequential connections based on:\n- Shared themes or topics\n- Related concepts or ideas\n- Cause-and-effect relationships\n- Questions and answers across different parts of the conversation\n- References or callbacks to earlier topics\n\nFor each relationship, provide:\n- source_node_id: ID of the source node\n- target_node_id: ID of the target node\n- relationship_type: One of [\"theme\", \"reference\", \"cause_effect\", \"elaboration\", \"contrast\", \"question_answer\"]\n- strength: Float 0.0-1.0 (how strong is this connection)\n- description: Brief explanation of the relationship\n\nReturn a JSON array of relationships.\n\nExample:\n[\n  {\n    \"source_node_id\": \"node_3\",\n    \"target_node_id\": \"node_7\",\n    \"relationship_type\": \"theme\",\n    \"strength\": 0.8,\n    \"description\": \"Both nodes discuss timeline and deadlines\"\n  }\n]\n\nRespond with ONLY the JSON array.",
+
+      "constraints": {
+        "max_relationships_per_node": 5,
+        "min_strength": 0.5
+      }
+    },
+
+    "refine_node_summary": {
+      "description": "Generate or refine a node summary given its utterances",
+      "model": "gpt-4",
+      "temperature": 0.7,
+      "max_tokens": 500,
+      "template": "Summarize the following conversation segment in 1-3 sentences:\n\n{utterances_text}\n\nProvide:\n1. A clear, concise summary\n2. Main points discussed\n3. Key decisions or outcomes (if any)\n\nKeep the summary conversational and easy to understand.",
+
+      "output_format": "plain_text"
+    },
+
+    "extract_keywords": {
+      "description": "Extract key terms and concepts from text",
+      "model": "gpt-3.5-turbo",
+      "temperature": 0.3,
+      "max_tokens": 200,
+      "template": "Extract 3-5 key terms or concepts from this text:\n\n{text}\n\nReturn ONLY a JSON array of strings, e.g.: [\"keyword1\", \"keyword2\", \"keyword3\"]",
+
+      "output_format": "json_array"
+    },
+
+    "identify_speakers_in_segment": {
+      "description": "Identify primary and secondary speakers in a segment",
+      "model": "gpt-3.5-turbo",
+      "temperature": 0.2,
+      "max_tokens": 300,
+      "template": "Analyze this conversation segment and identify:\n\n{utterances_text}\n\n1. Primary speaker: Who spoke the most or led the discussion\n2. Secondary speakers: Other active participants\n3. Speaker transitions: Notable hand-offs or back-and-forth\n\nReturn JSON:\n{\n  \"primary_speaker\": \"Name\",\n  \"secondary_speakers\": [\"Name1\", \"Name2\"],\n  \"transitions\": [{\"from\": \"Name1\", \"to\": \"Name2\", \"type\": \"question_answer\"}]\n}",
+
+      "output_format": "json_object"
+    },
+
+    "suggest_zoom_levels": {
+      "description": "Suggest appropriate zoom levels for a node based on its characteristics",
+      "model": "gpt-3.5-turbo",
+      "temperature": 0.2,
+      "max_tokens": 100,
+      "template": "Given a conversation node with these characteristics:\n- Duration: {utterance_count} utterances\n- Importance: {importance}\n- Granularity: {granularity}\n\nSuggest which zoom levels (1-5) this node should be visible at:\n1 = SENTENCE (most granular)\n2 = TURN\n3 = TOPIC\n4 = THEME\n5 = ARC (least granular)\n\nReturn ONLY a JSON array of integers, e.g.: [3, 4, 5]",
+
+      "output_format": "json_array"
+    }
+  },
+
+  "model_pricing": {
+    "gpt-4": {
+      "input_per_1k": 0.03,
+      "output_per_1k": 0.06
+    },
+    "gpt-3.5-turbo": {
+      "input_per_1k": 0.0005,
+      "output_per_1k": 0.0015
+    }
+  },
+
+  "defaults": {
+    "default_model": "gpt-4",
+    "default_temperature": 0.5,
+    "default_max_tokens": 2000,
+    "retry_attempts": 3,
+    "timeout_seconds": 30
+  }
+}

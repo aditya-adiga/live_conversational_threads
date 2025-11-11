@@ -1,0 +1,16 @@
+00:00:00
+Alice ~: Hello everyone, thanks for joining today's meeting.
+Bob ~: Hi Alice, happy to be here.
+
+00:01:15
+Alice ~: Let's discuss the project timeline.
+Bob ~: Sounds good. I think we should aim for end of Q1.
+
+00:02:30
+Charlie ~: I agree with Bob. That gives us enough time.
+Alice ~: Perfect. Let's make it official then.
+
+00:03:00
+Bob ~: Should we schedule a follow-up?
+Alice ~: Yes, let's meet again next week.
+Charlie ~: Works for me.

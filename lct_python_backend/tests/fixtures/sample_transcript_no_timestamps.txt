@@ -1,0 +1,5 @@
+Alice ~: This transcript has no timestamps.
+Bob ~: It should still parse correctly.
+Charlie ~: And estimate times for each utterance.
+Alice ~: That's the expected behavior.
+Bob ~: Good to know!

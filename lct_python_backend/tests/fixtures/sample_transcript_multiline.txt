@@ -1,0 +1,17 @@
+00:00:00
+Alice ~: This is a long utterance
+that spans multiple lines
+and continues here.
+
+Bob ~: Short response.
+
+00:01:00
+Charlie ~: Another multiline
+utterance that talks about
+several different topics
+in one continuous thought.
+
+Alice ~: I understand what you mean.
+We should definitely consider
+all the implications before
+making a final decision.

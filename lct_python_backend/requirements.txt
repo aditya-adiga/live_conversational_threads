@@ -6,3 +6,19 @@ pydantic==2.11.5
 google-genai==1.17.0
 google-cloud-storage==3.1.0
 databases[postgresql]==0.9.0
+
+# Database migrations and ORM
+alembic==1.13.1
+sqlalchemy==2.0.25
+asyncpg==0.29.0
+psycopg2-binary==2.9.9
+
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+
+# Instrumentation
+opentelemetry-api==1.22.0
+opentelemetry-sdk==1.22.0
+opentelemetry-instrumentation-fastapi==0.43b0

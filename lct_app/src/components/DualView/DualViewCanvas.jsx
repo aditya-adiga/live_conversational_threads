@@ -11,18 +11,25 @@ import PropTypes from 'prop-types';
 import { ReactFlowProvider } from 'reactflow';
 import TimelineView from './TimelineView';
 import ContextualNetworkView from './ContextualNetworkView';
-import useSyncController from '../../hooks/useSyncController';
+import useZoomController from '../../hooks/useZoomController';
+import { ZoomControls } from '../ZoomControls';
 import {
   fetchGraph,
   transformNodesToReactFlow,
   transformEdgesToReactFlow,
-  getZoomLevelName,
 } from '../../services/graphApi';
 import 'reactflow/dist/style.css';
 
 export default function DualViewCanvas({ conversationId }) {
-  // Sync controller for synchronized state
-  const syncController = useSyncController(3); // Start at zoom level 3 (TOPIC)
+  // Enhanced zoom controller with transitions and history (Week 6)
+  const zoomController = useZoomController(3, {
+    transitionDuration: 300,
+    enableHistory: true,
+    maxHistorySize: 20,
+    onZoomChange: (change) => {
+      console.log(`Zoom changed from ${change.from} to ${change.to} (${change.direction})`);
+    },
+  });
 
   // Graph data state
   const [graphData, setGraphData] = useState(null);
@@ -63,34 +70,20 @@ export default function DualViewCanvas({ conversationId }) {
 
     const nodes = transformNodesToReactFlow(
       graphData.nodes,
-      syncController.zoomLevel
+      zoomController.zoomLevel
     );
 
     const edges = transformEdgesToReactFlow(graphData.edges);
 
     return { nodes, edges };
-  }, [graphData, syncController.zoomLevel]);
+  }, [graphData, zoomController.zoomLevel]);
 
   // Filter nodes by current zoom level for visibility
   const visibleNodes = useMemo(() => {
     return nodes.filter(node =>
-      node.data.zoomLevels?.includes(syncController.zoomLevel)
+      node.data.zoomLevels?.includes(zoomController.zoomLevel)
     );
-  }, [nodes, syncController.zoomLevel]);
-
-  // Handle zoom level change with keyboard
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.key === '+' || event.key === '=') {
-        syncController.zoomIn();
-      } else if (event.key === '-' || event.key === '_') {
-        syncController.zoomOut();
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [syncController]);
+  }, [nodes, zoomController.zoomLevel]);
 
   // Loading state
   if (loading) {
@@ -152,30 +145,14 @@ export default function DualViewCanvas({ conversationId }) {
           <span className="text-lg font-bold text-white">{graphData.conversation_id}</span>
         </div>
 
-        {/* Center: Zoom Controls */}
-        <div className="flex items-center gap-4 bg-white/20 backdrop-blur-sm rounded-lg px-6 py-3">
-          <button
-            onClick={syncController.zoomOut}
-            disabled={syncController.isZoomLevelMax}
-            className="px-4 py-2 bg-white text-blue-600 font-bold rounded-lg shadow hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-          >
-            −
-          </button>
-
-          <div className="flex flex-col items-center min-w-[120px]">
-            <span className="text-xs text-white/90 font-semibold">ZOOM LEVEL</span>
-            <span className="text-3xl font-bold text-white">{syncController.zoomLevel}</span>
-            <span className="text-sm text-white/90">{getZoomLevelName(syncController.zoomLevel)}</span>
-          </div>
-
-          <button
-            onClick={syncController.zoomIn}
-            disabled={syncController.isZoomLevelMin}
-            className="px-4 py-2 bg-white text-blue-600 font-bold rounded-lg shadow hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
-          >
-            +
-          </button>
-        </div>
+        {/* Center: Enhanced Zoom Controls (Week 6) */}
+        <ZoomControls
+          zoomController={zoomController}
+          showHistory={true}
+          showLevelIndicator={true}
+          showKeyboardHints={false}
+          compact={false}
+        />
 
         {/* Right: Stats */}
         <div className="flex gap-6 text-white">
@@ -202,11 +179,11 @@ export default function DualViewCanvas({ conversationId }) {
             <ContextualNetworkView
               nodes={nodes}
               edges={edges}
-              selectedNode={syncController.selectedNode}
-              onNodeSelect={syncController.setSelectedNode}
-              viewport={syncController.viewport}
-              onViewportChange={syncController.setViewport}
-              zoomLevel={syncController.zoomLevel}
+              selectedNode={zoomController.selectedNode}
+              onNodeSelect={zoomController.setSelectedNode}
+              viewport={zoomController.viewport}
+              onViewportChange={zoomController.setViewport}
+              zoomLevel={zoomController.zoomLevel}
             />
           </ReactFlowProvider>
         </div>
@@ -217,21 +194,24 @@ export default function DualViewCanvas({ conversationId }) {
             <TimelineView
               nodes={nodes}
               edges={edges}
-              selectedNode={syncController.selectedNode}
-              onNodeSelect={syncController.setSelectedNode}
-              viewport={syncController.viewport}
-              onViewportChange={syncController.setViewport}
-              zoomLevel={syncController.zoomLevel}
+              selectedNode={zoomController.selectedNode}
+              onNodeSelect={zoomController.setSelectedNode}
+              viewport={zoomController.viewport}
+              onViewportChange={zoomController.setViewport}
+              zoomLevel={zoomController.zoomLevel}
             />
           </ReactFlowProvider>
         </div>
       </div>
 
-      {/* Keyboard Shortcuts Hint */}
-      <div className="absolute bottom-4 left-4 bg-black/70 backdrop-blur-md text-white px-4 py-2 rounded-lg text-xs">
+      {/* Enhanced Keyboard Shortcuts Hint (Week 6) */}
+      <div className="absolute bottom-4 left-4 bg-black/70 backdrop-blur-md text-white px-4 py-2 rounded-lg text-xs space-y-1">
         <div className="flex gap-4">
-          <span><kbd className="bg-white/20 px-2 py-1 rounded">+</kbd> Zoom In</span>
-          <span><kbd className="bg-white/20 px-2 py-1 rounded">−</kbd> Zoom Out</span>
+          <span><kbd className="bg-white/20 px-2 py-1 rounded">+</kbd> / <kbd className="bg-white/20 px-2 py-1 rounded">−</kbd> Zoom</span>
+          <span><kbd className="bg-white/20 px-2 py-1 rounded">Ctrl</kbd> + <kbd className="bg-white/20 px-2 py-1 rounded">1-5</kbd> Jump</span>
+        </div>
+        <div className="flex gap-4">
+          <span><kbd className="bg-white/20 px-2 py-1 rounded">Alt</kbd> + <kbd className="bg-white/20 px-2 py-1 rounded">←</kbd> / <kbd className="bg-white/20 px-2 py-1 rounded">→</kbd> History</span>
         </div>
       </div>
     </div>

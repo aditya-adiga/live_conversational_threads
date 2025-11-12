@@ -3399,3 +3399,87 @@ async def get_node_frames(node_id: str):
     except Exception as e:
         print(f"[ERROR] Failed to get node frames: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Cost Tracking Dashboard
+# ============================================================================
+
+@lct_app.get("/api/cost-tracking/stats")
+async def get_cost_stats(time_range: str = "7d"):
+    """
+    Get API cost statistics
+
+    Query params:
+        time_range: 1d, 7d, 30d, or all
+
+    Returns aggregated cost data by feature, model, and time
+    """
+    try:
+        # Mock data for now - in production this would query api_calls_log table
+        # TODO: Implement real database queries when api_calls_log is populated
+
+        mock_data = {
+            "total_cost": 12.45,
+            "total_calls": 450,
+            "total_tokens": 125000,
+            "avg_cost_per_call": 0.0277,
+            "avg_tokens_per_call": 278,
+            "conversations_analyzed": 15,
+            "by_feature": {
+                "simulacra_detection": {
+                    "cost": 3.20,
+                    "calls": 150,
+                    "tokens": 40000
+                },
+                "bias_detection": {
+                    "cost": 4.50,
+                    "calls": 150,
+                    "tokens": 45000
+                },
+                "frame_detection": {
+                    "cost": 4.75,
+                    "calls": 150,
+                    "tokens": 40000
+                }
+            },
+            "by_model": {
+                "claude-3-5-sonnet-20241022": {
+                    "cost": 12.45,
+                    "calls": 450,
+                    "tokens": 125000
+                }
+            },
+            "recent_calls": [
+                {
+                    "timestamp": "2025-11-12T12:30:00Z",
+                    "endpoint": "frame_detection",
+                    "model": "claude-3-5-sonnet-20241022",
+                    "total_tokens": 350,
+                    "cost_usd": 0.035,
+                    "latency_ms": 2500
+                },
+                {
+                    "timestamp": "2025-11-12T12:25:00Z",
+                    "endpoint": "bias_detection",
+                    "model": "claude-3-5-sonnet-20241022",
+                    "total_tokens": 280,
+                    "cost_usd": 0.028,
+                    "latency_ms": 2100
+                },
+                {
+                    "timestamp": "2025-11-12T12:20:00Z",
+                    "endpoint": "simulacra_detection",
+                    "model": "claude-3-5-sonnet-20241022",
+                    "total_tokens": 200,
+                    "cost_usd": 0.020,
+                    "latency_ms": 1800
+                }
+            ]
+        }
+
+        return mock_data
+
+    except Exception as e:
+        print(f"[ERROR] Failed to get cost stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

@@ -9,6 +9,7 @@ import EditHistory from "../pages/EditHistory";
 import SimulacraAnalysis from "../pages/SimulacraAnalysis";
 import BiasAnalysis from "../pages/BiasAnalysis";
 import FrameAnalysis from "../pages/FrameAnalysis";
+import CostDashboard from "../pages/CostDashboard";
 
 export default function AppRoutes() {
   return (
@@ -22,6 +23,7 @@ export default function AppRoutes() {
       <Route path="/simulacra/:conversationId" element={<SimulacraAnalysis />} />
       <Route path="/biases/:conversationId" element={<BiasAnalysis />} />
       <Route path="/frames/:conversationId" element={<FrameAnalysis />} />
+      <Route path="/cost-dashboard" element={<CostDashboard />} />
       <Route path="/settings" element={<Settings />} />
     </Routes>
   );

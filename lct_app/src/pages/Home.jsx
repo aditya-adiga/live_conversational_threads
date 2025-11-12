@@ -21,6 +21,20 @@ export default function Home() {
         >
           Browse Conversations
         </button>
+
+        <button
+          onClick={() => navigate("/cost-dashboard")}
+          className="w-full px-6 py-3 bg-indigo-500 hover:bg-indigo-700 active:bg-indigo-800 rounded-2xl shadow-lg text-white text-lg transition-all duration-200"
+        >
+          💰 Cost Dashboard
+        </button>
+
+        <button
+          onClick={() => navigate("/settings")}
+          className="w-full px-6 py-3 bg-gray-500 hover:bg-gray-700 active:bg-gray-800 rounded-2xl shadow-lg text-white text-lg transition-all duration-200"
+        >
+          ⚙️ Settings
+        </button>
       </div>
     </div>
   );

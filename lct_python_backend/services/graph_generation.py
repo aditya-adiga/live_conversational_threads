@@ -15,64 +15,7 @@ import asyncio
 from instrumentation import track_api_call
 from parsers import ParsedTranscript, Utterance as ParserUtterance
 from models import Node, Relationship, Conversation
-
-
-class PromptLoader:
-    """Loads and manages prompts from prompts.json."""
-
-    def __init__(self, prompts_file: str = "prompts.json"):
-        """
-        Initialize prompt loader.
-
-        Args:
-            prompts_file: Path to prompts.json file
-        """
-        self.prompts_file = prompts_file
-        self.prompts = self._load_prompts()
-
-    def _load_prompts(self) -> Dict:
-        """Load prompts from JSON file."""
-        prompts_path = Path(__file__).parent.parent / self.prompts_file
-
-        if not prompts_path.exists():
-            raise FileNotFoundError(f"Prompts file not found: {prompts_path}")
-
-        with open(prompts_path, 'r') as f:
-            return json.load(f)
-
-    def get_prompt(self, prompt_name: str) -> Dict:
-        """
-        Get a prompt configuration by name.
-
-        Args:
-            prompt_name: Name of the prompt (e.g., "initial_clustering")
-
-        Returns:
-            Prompt configuration dict
-
-        Raises:
-            KeyError: If prompt not found
-        """
-        if prompt_name not in self.prompts.get("prompts", {}):
-            raise KeyError(f"Prompt '{prompt_name}' not found in prompts.json")
-
-        return self.prompts["prompts"][prompt_name]
-
-    def render_template(self, prompt_name: str, **kwargs) -> str:
-        """
-        Render a prompt template with variables.
-
-        Args:
-            prompt_name: Name of the prompt
-            **kwargs: Template variables
-
-        Returns:
-            Rendered prompt text
-        """
-        prompt = self.get_prompt(prompt_name)
-        template = prompt.get("template", "")
-
-        return template.format(**kwargs)
+from .prompt_manager import get_prompt_manager
 
 
 class GraphGenerationService:
@@ -97,7 +40,7 @@ class GraphGenerationService:
         """
         self.llm_client = llm_client
         self.db = db
-        self.prompt_loader = PromptLoader()
+        self.prompt_manager = get_prompt_manager()
 
     async def generate_graph(
         self,
@@ -164,17 +107,19 @@ class GraphGenerationService:
         # Format transcript for LLM
         transcript_text = self._format_transcript_for_llm(transcript)
 
-        # Render prompt
-        prompt_text = self.prompt_loader.render_template(
+        # Render prompt using new PromptManager
+        prompt_text = self.prompt_manager.render_prompt(
             "initial_clustering",
-            utterance_count=len(transcript.utterances),
-            participant_count=len(transcript.participants),
-            participants=", ".join(transcript.participants),
-            transcript=transcript_text,
+            {
+                "utterance_count": len(transcript.utterances),
+                "participant_count": len(transcript.participants),
+                "participants": ", ".join(transcript.participants),
+                "transcript": transcript_text,
+            }
         )
 
-        # Get prompt config
-        prompt_config = self.prompt_loader.get_prompt("initial_clustering")
+        # Get prompt metadata
+        prompt_metadata = self.prompt_manager.get_prompt_metadata("initial_clustering")
 
         # Call LLM
         if self.llm_client is None:
@@ -185,9 +130,9 @@ class GraphGenerationService:
             # Make LLM API call (this will be tracked by decorator)
             response = await self._call_llm(
                 prompt=prompt_text,
-                model=prompt_config.get("model", "gpt-4"),
-                temperature=prompt_config.get("temperature", 0.5),
-                max_tokens=prompt_config.get("max_tokens", 4000),
+                model=prompt_metadata.get("model", "gpt-4"),
+                temperature=prompt_metadata.get("temperature", 0.5),
+                max_tokens=prompt_metadata.get("max_tokens", 4000),
             )
 
             # Parse response

@@ -3187,3 +3187,79 @@ async def add_edit_feedback(edit_id: str, feedback: dict):
     except Exception as e:
         print(f"[ERROR] Failed to add feedback: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Week 11: Simulacra Level Detection
+# ============================================================================
+
+@lct_app.post("/api/conversations/{conversation_id}/simulacra/analyze")
+async def analyze_simulacra_levels(
+    conversation_id: str,
+    force_reanalysis: bool = False
+):
+    """
+    Analyze all nodes in a conversation for Simulacra levels
+
+    Query params:
+        force_reanalysis: Re-analyze even if already analyzed
+
+    Returns distribution and per-node analysis
+    """
+    try:
+        async with get_session() as session:
+            from services.simulacra_detector import SimulacraDetector
+
+            detector = SimulacraDetector(session)
+            results = await detector.analyze_conversation(
+                conversation_id,
+                force_reanalysis=force_reanalysis
+            )
+
+            return results
+
+    except Exception as e:
+        print(f"[ERROR] Simulacra analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@lct_app.get("/api/conversations/{conversation_id}/simulacra")
+async def get_simulacra_results(conversation_id: str):
+    """Get existing Simulacra analysis results for a conversation"""
+    try:
+        async with get_session() as session:
+            from services.simulacra_detector import SimulacraDetector
+
+            detector = SimulacraDetector(session)
+            results = await detector.get_conversation_results(conversation_id)
+
+            return results
+
+    except Exception as e:
+        print(f"[ERROR] Failed to get Simulacra results: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@lct_app.get("/api/nodes/{node_id}/simulacra")
+async def get_node_simulacra(node_id: str):
+    """Get Simulacra analysis for a specific node"""
+    try:
+        async with get_session() as session:
+            from services.simulacra_detector import SimulacraDetector
+
+            detector = SimulacraDetector(session)
+            result = await detector.get_node_simulacra(node_id)
+
+            if result is None:
+                raise HTTPException(
+                    status_code=404,
+                    detail="No Simulacra analysis found for this node"
+                )
+
+            return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Failed to get node Simulacra: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

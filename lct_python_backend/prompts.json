@@ -71,6 +71,16 @@
       "template": "Given a conversation node with these characteristics:\n- Duration: {utterance_count} utterances\n- Importance: {importance}\n- Granularity: {granularity}\n\nSuggest which zoom levels (1-5) this node should be visible at:\n1 = SENTENCE (most granular)\n2 = TURN\n3 = TOPIC\n4 = THEME\n5 = ARC (least granular)\n\nReturn ONLY a JSON array of integers, e.g.: [3, 4, 5]",
 
       "output_format": "json_array"
+    },
+
+    "simulacra_detection": {
+      "description": "Detect Simulacra level (1-4) for conversation nodes based on Baudrillard's theory",
+      "model": "claude-3-5-sonnet-20241022",
+      "temperature": 0.2,
+      "max_tokens": 1024,
+      "template": "You are analyzing a conversation node to classify its Simulacra level based on Jean Baudrillard's theory of simulation and hyperreality.\n\n**Simulacra Levels:**\n\n**Level 1 - Reflection of Reality**: Direct factual statements and observable events\n- Examples: \"The meeting started at 2 PM\", \"There are 5 people present\", \"The document has 50 pages\"\n- Characteristics: Verifiable, objective, directly observable, concrete\n\n**Level 2 - Perversion of Reality**: Interpretations, opinions, and subjective representations\n- Examples: \"I think this meeting is productive\", \"The document seems comprehensive\", \"Most people agree\"\n- Characteristics: Subjective but still grounded in reality, personal interpretations, opinions based on observation\n\n**Level 3 - Pretense of Reality**: Hypotheticals and speculation that mask uncertainty\n- Examples: \"If we implement this, it will solve all our problems\", \"This is obviously the best approach\", \"Everyone knows this is how it should be\"\n- Characteristics: Presents uncertain claims as facts, hypotheticals as certainties, assumptions as truths\n\n**Level 4 - Pure Simulacrum**: Abstract concepts disconnected from verifiable reality\n- Examples: \"This paradigm shift will revolutionize everything\", \"We need to leverage synergies\", \"Market forces will naturally optimize outcomes\"\n- Characteristics: Buzzwords, abstractions, self-referential concepts, jargon disconnected from concrete meaning\n\n---\n\n**Node to Analyze:**\n\nTitle: $node_name\n\nSummary: $node_summary\n\nKeywords: $keywords\n\n---\n\n**Task**: Classify this node's primary Simulacra level (1-4) based on the dominant mode of communication.\n\nProvide your analysis in JSON format:\n\n{{\n  \"level\": <1-4>,\n  \"confidence\": <0.0-1.0>,\n  \"reasoning\": \"<Explain why this level was chosen, referencing specific content>\",\n  \"examples\": [\"<quote or paraphrase from the node that exemplifies this level>\", \"<another example>\"]\n}}\n\n**Important:**\n- Choose the DOMINANT level if multiple levels are present\n- Be specific in your reasoning\n- Provide 1-3 concrete examples from the node\n- Confidence should reflect how clearly the node fits the chosen level\n- Return ONLY valid JSON, no other text",
+
+      "output_format": "json_object"
     }
   },
 

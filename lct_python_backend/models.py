@@ -382,3 +382,49 @@ class APICallsLog(Base):
         Index('idx_api_calls_started', 'started_at'),
         Index('idx_api_calls_cost', 'total_cost'),
     )
+
+
+class EditFeedback(Base):
+    """Feedback annotations for edit history"""
+    __tablename__ = "edit_feedback"
+
+    # Identity
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    edit_id = Column(UUID(as_uuid=True), ForeignKey('edits_log.id'), nullable=False)
+
+    # Feedback content
+    text = Column(Text, nullable=False)
+
+    # Metadata
+    timestamp = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index('idx_edit_feedback_edit', 'edit_id'),
+    )
+
+
+class SimulacraAnalysis(Base):
+    """Simulacra level detection results for conversation nodes"""
+    __tablename__ = "simulacra_analysis"
+
+    # Identity
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    node_id = Column(UUID(as_uuid=True), ForeignKey('nodes.id'), nullable=False, unique=True)
+    conversation_id = Column(UUID(as_uuid=True), ForeignKey('conversations.id'), nullable=False)
+
+    # Analysis results
+    level = Column(Integer, nullable=False)  # 1-4
+    confidence = Column(Float, nullable=False)  # 0.0-1.0
+    reasoning = Column(Text)
+    examples = Column(JSONB)  # Array of example quotes
+
+    # Metadata
+    analyzed_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index('idx_simulacra_node', 'node_id'),
+        Index('idx_simulacra_conversation', 'conversation_id'),
+        Index('idx_simulacra_level', 'level'),
+        CheckConstraint('level >= 1 AND level <= 4', name='check_simulacra_level'),
+        CheckConstraint('confidence >= 0.0 AND confidence <= 1.0', name='check_simulacra_confidence'),
+    )

@@ -3,6 +3,7 @@ import Home from "../pages/Home";
 import NewConversation from "../pages/NewConversation";
 import ViewConversation from "../pages/ViewConversation";
 import Browse from "../pages/Browse";
+import Analytics from "../pages/Analytics";
 
 export default function AppRoutes() {
   return (
@@ -11,6 +12,7 @@ export default function AppRoutes() {
       <Route path="/new" element={<NewConversation />} />
       <Route path="/browse" element={<Browse />} />
       <Route path="/conversation/:conversationId" element={<ViewConversation />} />
+      <Route path="/analytics/:conversationId" element={<Analytics />} />
     </Routes>
   );
 }

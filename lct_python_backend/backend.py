@@ -2544,3 +2544,139 @@ async def import_from_obsidian_canvas(request: CanvasImportRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Import failed: {str(e)}")
 #         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+# ============================================================================
+# ANALYTICS ENDPOINTS (Week 8)
+# ============================================================================
+
+from services.speaker_analytics import SpeakerAnalytics
+
+@lct_app.get("/api/analytics/conversations/{conversation_id}/analytics")
+async def get_conversation_analytics(conversation_id: str):
+    """
+    Get comprehensive speaker analytics for a conversation
+
+    Returns:
+    - speakers: Dictionary of speaker statistics
+    - timeline: Chronological speaker activity
+    - roles: Detected speaker roles
+    - summary: Overall conversation statistics
+    """
+    try:
+        async with db.session() as session:
+            analytics_service = SpeakerAnalytics(session)
+            analytics = await analytics_service.calculate_full_analytics(conversation_id)
+
+            if not analytics["speakers"]:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No analytics data found for conversation {conversation_id}"
+                )
+
+            return analytics
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Failed to calculate analytics: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to calculate analytics: {str(e)}"
+        )
+
+
+@lct_app.get("/api/analytics/conversations/{conversation_id}/speakers/{speaker_id}")
+async def get_speaker_stats(conversation_id: str, speaker_id: str):
+    """
+    Get statistics for a specific speaker in a conversation
+
+    Returns detailed statistics for one speaker including:
+    - Time spoken (seconds and percentage)
+    - Turn count and percentage
+    - Topics dominated
+    - Detected role
+    - Average turn duration
+    """
+    try:
+        async with db.session() as session:
+            analytics_service = SpeakerAnalytics(session)
+            analytics = await analytics_service.calculate_full_analytics(conversation_id)
+
+            if speaker_id not in analytics["speakers"]:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Speaker {speaker_id} not found in conversation {conversation_id}"
+                )
+
+            return analytics["speakers"][speaker_id]
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Failed to get speaker stats: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get speaker stats: {str(e)}"
+        )
+
+
+@lct_app.get("/api/analytics/conversations/{conversation_id}/timeline")
+async def get_speaker_timeline(conversation_id: str):
+    """
+    Get chronological timeline of speaker activity
+
+    Returns list of timeline segments showing:
+    - Sequence number
+    - Speaker ID and name
+    - Timestamps
+    - Duration
+    - Text preview
+    - Speaker changes
+    """
+    try:
+        async with db.session() as session:
+            analytics_service = SpeakerAnalytics(session)
+            analytics = await analytics_service.calculate_full_analytics(conversation_id)
+
+            return analytics["timeline"]
+
+    except Exception as e:
+        print(f"[ERROR] Failed to get timeline: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get timeline: {str(e)}"
+        )
+
+
+@lct_app.get("/api/analytics/conversations/{conversation_id}/roles")
+async def get_speaker_roles(conversation_id: str):
+    """
+    Get detected speaker roles for a conversation
+
+    Returns dictionary mapping speaker_id to role:
+    - facilitator: Speaks frequently but briefly
+    - contributor: Speaks extensively, dominates topics
+    - observer: Speaks infrequently
+    """
+    try:
+        async with db.session() as session:
+            analytics_service = SpeakerAnalytics(session)
+            analytics = await analytics_service.calculate_full_analytics(conversation_id)
+
+            return analytics["roles"]
+
+    except Exception as e:
+        print(f"[ERROR] Failed to get roles: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get roles: {str(e)}"
+        )

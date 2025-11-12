@@ -2,7 +2,6 @@
   "version": "1.0.0",
   "last_updated": "2025-11-11",
   "description": "Prompts for Live Conversational Threads AI analysis",
-
   "prompts": {
     "initial_clustering": {
       "description": "Generate initial topic-based nodes from transcript",
@@ -10,7 +9,6 @@
       "temperature": 0.5,
       "max_tokens": 4000,
       "template": "You are analyzing a conversation transcript to identify natural topic shifts and create a hierarchical graph structure.\n\nGiven the following conversation with {utterance_count} utterances from {participant_count} participants:\n\nParticipants: {participants}\n\nTranscript:\n{transcript}\n\nTask: Identify natural topic boundaries and create nodes at 5 different zoom levels:\n\n1. SENTENCE (Level 1): Individual important sentences or short exchanges\n2. TURN (Level 2): Speaker turns or complete thoughts\n3. TOPIC (Level 3): Distinct topics or sub-discussions (3-10 utterances)\n4. THEME (Level 4): Major themes or discussion areas (10-30 utterances)\n5. ARC (Level 5): Overall narrative arcs or meeting segments (30+ utterances)\n\nFor each node, provide:\n- title: Brief descriptive title (5-10 words)\n- summary: Concise summary of what was discussed\n- zoom_levels: Array of zoom levels where this node should be visible [1-5]\n- start_utterance: Index of first utterance (0-based)\n- end_utterance: Index of last utterance (0-based)\n- primary_speaker: Main speaker for this segment (if applicable)\n- keywords: 3-5 key terms or concepts\n\nReturn a JSON array of nodes. Ensure:\n- Good coverage across all 5 zoom levels\n- Nodes at higher zoom levels (4-5) encompass lower level nodes\n- Natural topic boundaries (don't split mid-thought)\n- Each utterance belongs to at least one node\n\nExample response:\n[\n  {{\n    \"title\": \"Opening and Introductions\",\n    \"summary\": \"Team members greet each other and Alice opens the meeting\",\n    \"zoom_levels\": [3, 4, 5],\n    \"start_utterance\": 0,\n    \"end_utterance\": 5,\n    \"primary_speaker\": \"Alice\",\n    \"keywords\": [\"greeting\", \"introduction\", \"meeting start\"]\n  }}\n]\n\nRespond with ONLY the JSON array, no other text.",
-
       "few_shot_examples": [
         {
           "input": "Small 3-person conversation about project planning",
@@ -19,81 +17,74 @@
         }
       ]
     },
-
     "detect_contextual_relationships": {
       "description": "Identify contextual/thematic relationships between nodes",
       "model": "gpt-4",
       "temperature": 0.3,
       "max_tokens": 2000,
       "template": "You are analyzing relationships between conversation topics.\n\nGiven these nodes from a conversation:\n\n{nodes_json}\n\nTask: Identify meaningful contextual relationships between nodes. These are NON-sequential connections based on:\n- Shared themes or topics\n- Related concepts or ideas\n- Cause-and-effect relationships\n- Questions and answers across different parts of the conversation\n- References or callbacks to earlier topics\n\nFor each relationship, provide:\n- source_node_id: ID of the source node\n- target_node_id: ID of the target node\n- relationship_type: One of [\"theme\", \"reference\", \"cause_effect\", \"elaboration\", \"contrast\", \"question_answer\"]\n- strength: Float 0.0-1.0 (how strong is this connection)\n- description: Brief explanation of the relationship\n\nReturn a JSON array of relationships.\n\nExample:\n[\n  {{\n    \"source_node_id\": \"node_3\",\n    \"target_node_id\": \"node_7\",\n    \"relationship_type\": \"theme\",\n    \"strength\": 0.8,\n    \"description\": \"Both nodes discuss timeline and deadlines\"\n  }}\n]\n\nRespond with ONLY the JSON array.",
-
       "constraints": {
         "max_relationships_per_node": 5,
         "min_strength": 0.5
       }
     },
-
     "refine_node_summary": {
       "description": "Generate or refine a node summary given its utterances",
       "model": "gpt-4",
       "temperature": 0.7,
       "max_tokens": 500,
       "template": "Summarize the following conversation segment in 1-3 sentences:\n\n{utterances_text}\n\nProvide:\n1. A clear, concise summary\n2. Main points discussed\n3. Key decisions or outcomes (if any)\n\nKeep the summary conversational and easy to understand.",
-
       "output_format": "plain_text"
     },
-
     "extract_keywords": {
       "description": "Extract key terms and concepts from text",
       "model": "gpt-3.5-turbo",
       "temperature": 0.3,
       "max_tokens": 200,
       "template": "Extract 3-5 key terms or concepts from this text:\n\n{text}\n\nReturn ONLY a JSON array of strings, e.g.: [\"keyword1\", \"keyword2\", \"keyword3\"]",
-
       "output_format": "json_array"
     },
-
     "identify_speakers_in_segment": {
       "description": "Identify primary and secondary speakers in a segment",
       "model": "gpt-3.5-turbo",
       "temperature": 0.2,
       "max_tokens": 300,
       "template": "Analyze this conversation segment and identify:\n\n{utterances_text}\n\n1. Primary speaker: Who spoke the most or led the discussion\n2. Secondary speakers: Other active participants\n3. Speaker transitions: Notable hand-offs or back-and-forth\n\nReturn JSON:\n{{\n  \"primary_speaker\": \"Name\",\n  \"secondary_speakers\": [\"Name1\", \"Name2\"],\n  \"transitions\": [{{\"from\": \"Name1\", \"to\": \"Name2\", \"type\": \"question_answer\"}}]\n}}",
-
       "output_format": "json_object"
     },
-
     "suggest_zoom_levels": {
       "description": "Suggest appropriate zoom levels for a node based on its characteristics",
       "model": "gpt-3.5-turbo",
       "temperature": 0.2,
       "max_tokens": 100,
       "template": "Given a conversation node with these characteristics:\n- Duration: {utterance_count} utterances\n- Importance: {importance}\n- Granularity: {granularity}\n\nSuggest which zoom levels (1-5) this node should be visible at:\n1 = SENTENCE (most granular)\n2 = TURN\n3 = TOPIC\n4 = THEME\n5 = ARC (least granular)\n\nReturn ONLY a JSON array of integers, e.g.: [3, 4, 5]",
-
       "output_format": "json_array"
     },
-
     "simulacra_detection": {
       "description": "Detect Simulacra level (1-4) for conversation nodes based on Baudrillard's theory",
       "model": "claude-3-5-sonnet-20241022",
       "temperature": 0.2,
       "max_tokens": 1024,
       "template": "You are analyzing a conversation node to classify its Simulacra level based on Jean Baudrillard's theory of simulation and hyperreality.\n\n**Simulacra Levels:**\n\n**Level 1 - Reflection of Reality**: Direct factual statements and observable events\n- Examples: \"The meeting started at 2 PM\", \"There are 5 people present\", \"The document has 50 pages\"\n- Characteristics: Verifiable, objective, directly observable, concrete\n\n**Level 2 - Perversion of Reality**: Interpretations, opinions, and subjective representations\n- Examples: \"I think this meeting is productive\", \"The document seems comprehensive\", \"Most people agree\"\n- Characteristics: Subjective but still grounded in reality, personal interpretations, opinions based on observation\n\n**Level 3 - Pretense of Reality**: Hypotheticals and speculation that mask uncertainty\n- Examples: \"If we implement this, it will solve all our problems\", \"This is obviously the best approach\", \"Everyone knows this is how it should be\"\n- Characteristics: Presents uncertain claims as facts, hypotheticals as certainties, assumptions as truths\n\n**Level 4 - Pure Simulacrum**: Abstract concepts disconnected from verifiable reality\n- Examples: \"This paradigm shift will revolutionize everything\", \"We need to leverage synergies\", \"Market forces will naturally optimize outcomes\"\n- Characteristics: Buzzwords, abstractions, self-referential concepts, jargon disconnected from concrete meaning\n\n---\n\n**Node to Analyze:**\n\nTitle: $node_name\n\nSummary: $node_summary\n\nKeywords: $keywords\n\n---\n\n**Task**: Classify this node's primary Simulacra level (1-4) based on the dominant mode of communication.\n\nProvide your analysis in JSON format:\n\n{{\n  \"level\": <1-4>,\n  \"confidence\": <0.0-1.0>,\n  \"reasoning\": \"<Explain why this level was chosen, referencing specific content>\",\n  \"examples\": [\"<quote or paraphrase from the node that exemplifies this level>\", \"<another example>\"]\n}}\n\n**Important:**\n- Choose the DOMINANT level if multiple levels are present\n- Be specific in your reasoning\n- Provide 1-3 concrete examples from the node\n- Confidence should reflect how clearly the node fits the chosen level\n- Return ONLY valid JSON, no other text",
-
       "output_format": "json_object"
     },
-
     "bias_detection": {
       "description": "Detect cognitive biases and logical fallacies in conversation nodes",
       "model": "claude-3-5-sonnet-20241022",
       "temperature": 0.3,
       "max_tokens": 2048,
       "template": "You are analyzing a conversation node to identify cognitive biases and logical fallacies.\n\n**Bias Categories:**\n\n**Confirmation Biases** - Seeking information that confirms existing beliefs\n- Confirmation Bias: Favoring information that confirms pre-existing beliefs\n- Cherry Picking: Selecting only supporting data while ignoring contradictory evidence\n- Motivated Reasoning: Reasoning to reach a desired conclusion\n- Belief Perseverance: Maintaining beliefs despite contradictory evidence\n\n**Memory Biases** - Distortions in recall\n- Hindsight Bias: \"I knew it all along\" - seeing past events as predictable\n- Availability Heuristic: Overestimating likelihood based on memorability\n- Recency Bias: Overweighting recent events\n- False Memory: Remembering events incorrectly\n\n**Social Biases** - Group influence\n- Groupthink: Conformity leading to poor decisions\n- Authority Bias: Overvaluing authority opinions\n- Bandwagon Effect: Following the crowd\n- Halo Effect: Positive traits influencing overall judgment\n- In-Group Bias: Favoring one's own group\n\n**Decision-Making Biases** - Systematic judgment errors\n- Anchoring: Over-relying on first information\n- Sunk Cost Fallacy: Continuing based on past investment\n- Status Quo Bias: Preferring current state\n- Optimism Bias: Overestimating positive outcomes\n- Planning Fallacy: Underestimating time/costs\n\n**Attribution Biases** - Explaining behavior\n- Fundamental Attribution Error: Overemphasizing personality, underemphasizing situation\n- Self-Serving Bias: Success = me, failure = external\n- Just World Hypothesis: Believing people get what they deserve\n\n**Logical Fallacies** - Reasoning errors\n- Slippery Slope: One action leads to chain of negative consequences\n- Straw Man: Misrepresenting arguments\n- False Dichotomy: Only two options when more exist\n- Ad Hominem: Attacking person not argument\n- Appeal to Emotion: Manipulating emotions vs reasoning\n- Hasty Generalization: Broad conclusions from limited evidence\n\n---\n\n**Node to Analyze:**\n\nTitle: $node_name\n\nSummary: $node_summary\n\nKeywords: $keywords\n\n---\n\n**Task**: Identify ANY cognitive biases or logical fallacies present in this node.\n\nProvide analysis in JSON format:\n\n{{\n  \"biases\": [\n    {{\n      \"bias_type\": \"<bias_name_snake_case>\",\n      \"category\": \"<confirmation|memory|social|decision|attribution|logical>\",\n      \"severity\": <0.0-1.0>,\n      \"confidence\": <0.0-1.0>,\n      \"description\": \"<How this specific bias manifests in this node>\",\n      \"evidence\": [\"<quote or paraphrase>\", \"<another example>\"]\n    }}\n  ]\n}}\n\n**Important:**\n- Return empty array if NO biases detected (many nodes won't have biases)\n- Only include biases you're confident about (confidence > 0.6)\n- Severity: 0.0 = minor/subtle, 1.0 = severe/obvious\n- Provide specific evidence from the node\n- Use snake_case for bias_type (e.g., \"confirmation_bias\", \"sunk_cost_fallacy\")\n- Return ONLY valid JSON, no other text\n\n**Examples:**\n\nNode: \"Everyone knows this approach is best, we've always done it this way\"\nBiases: [bandwagon_effect (everyone), status_quo_bias (always done it)]\n\nNode: \"The meeting discussed Q3 revenue targets\"\nBiases: [] (factual, no bias)\n\nNode: \"Since we already spent $$100K, we should continue despite poor results\"\nBiases: [sunk_cost_fallacy]",
-
+      "output_format": "json_object"
+    },
+    "frame_detection": {
+      "description": "Detect implicit frames, worldviews, and underlying assumptions",
+      "model": "claude-3-5-sonnet-20241022",
+      "temperature": 0.3,
+      "max_tokens": 2048,
+      "template": "You are analyzing a conversation node to identify implicit frames - the underlying worldviews, assumptions, and perspectives that shape how participants interpret and discuss topics.\n\n**Frame Categories:**\n\n**Economic Frames** - Assumptions about markets, value, resources\n- Market Fundamentalism: Markets are best way to organize society\n- Socialist Framework: Collective ownership and equitable distribution\n- Growth Imperative: Continuous growth is necessary\n- Scarcity Mindset: Resources are fundamentally limited\n- Abundance Mindset: There is enough for everyone\n- Zero-Sum Thinking: One's gain is another's loss\n\n**Moral/Ethical Frames** - Underlying ethical principles\n- Utilitarian: Maximizing overall good/happiness\n- Deontological: Focus on duties and rules\n- Virtue Ethics: Character and virtues matter most\n- Care Ethics: Relationships and empathy\n- Rights-Based: Individual rights and freedoms\n- Consequentialist: Judging by outcomes only\n\n**Political Frames** - Assumptions about power and governance\n- Progressive: Social progress and reducing inequality\n- Conservative: Tradition, stability, gradual change\n- Libertarian: Individual liberty, minimal government\n- Authoritarian: Strong central authority\n- Egalitarian: Equality and equal treatment\n- Meritocratic: Success based on merit\n\n**Scientific/Epistemological Frames** - How we know and understand\n- Reductionist: Breaking down into components\n- Holistic: Understanding as integrated wholes\n- Empiricist: Observation and evidence\n- Rationalist: Reason and logical deduction\n- Constructivist: Knowledge as socially constructed\n- Deterministic: Events are causally determined\n\n**Cultural Frames** - Identity, community, social relations\n- Individualist: Individual autonomy priority\n- Collectivist: Group harmony priority\n- Hierarchical: Acceptance of ranked structures\n- Egalitarian: Minimizing status differences\n- Universalist: Universal principles for all\n- Particularist: Context and circumstances matter\n\n**Temporal Frames** - Time, change, progress\n- Short-Term Focus: Immediate concerns\n- Long-Term Thinking: Future impacts matter\n- Cyclical View: Time as recurring patterns\n- Linear Progress: Continuous forward progress\n- Status Quo Permanence: Current conditions persist\n- Radical Change: Transformative disruption expected\n\n---\n\n**Node to Analyze:**\n\nTitle: $node_name\n\nSummary: $node_summary\n\nKeywords: $keywords\n\n---\n\n**Task**: Identify implicit frames - the underlying assumptions and worldviews that shape this discussion.\n\nProvide analysis in JSON format:\n\n{{\n  \"frames\": [\n    {{\n      \"frame_type\": \"<frame_name_snake_case>\",\n      \"category\": \"<economic|moral|political|scientific|cultural|temporal>\",\n      \"strength\": <0.0-1.0>,\n      \"confidence\": <0.0-1.0>,\n      \"description\": \"<How this frame manifests in the node>\",\n      \"evidence\": [\"<quote showing the frame>\", \"<another example>\"],\n      \"assumptions\": [\"<underlying assumption 1>\", \"<assumption 2>\"],\n      \"implications\": \"<What this frame implies about worldview>\"\n    }}\n  ]\n}}\n\n**Important:**\n- Return empty array if NO clear frames (some nodes are frame-neutral)\n- Only include frames with confidence > 0.6\n- Strength: how strongly the frame is present (0.0-1.0)\n- Multiple frames per node are common (e.g., both economic AND moral frames)\n- Assumptions: What must be true for this perspective to make sense?\n- Implications: What does this frame reveal about underlying beliefs?\n- Use snake_case (e.g., \"market_fundamentalism\", \"long_term_thinking\")\n- Return ONLY valid JSON\n\n**Examples:**\n\nNode: \"We need to maximize shareholder value and let the market decide\"\nFrames: [market_fundamentalism (economic), consequentialist (moral)]\nAssumptions: [\"Markets are efficient\", \"Shareholder value is primary goal\"]\n\nNode: \"The meeting covered Q3 logistics\"\nFrames: [] (descriptive, no strong frame)\n\nNode: \"We must consider the long-term environmental impact on future generations\"\nFrames: [long_term_thinking (temporal), care_ethics (moral)]\nAssumptions: [\"Future matters as much as present\", \"We have obligations to future people\"]",
       "output_format": "json_object"
     }
   },
-
   "model_pricing": {
     "gpt-4": {
       "input_per_1k": 0.03,
@@ -104,7 +95,6 @@
       "output_per_1k": 0.0015
     }
   },
-
   "defaults": {
     "default_model": "gpt-4",
     "default_temperature": 0.5,

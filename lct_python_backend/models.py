@@ -460,3 +460,37 @@ class BiasAnalysis(Base):
         CheckConstraint('severity >= 0.0 AND severity <= 1.0', name='check_bias_severity'),
         CheckConstraint('confidence >= 0.0 AND confidence <= 1.0', name='check_bias_confidence'),
     )
+
+
+class FrameAnalysis(Base):
+    """Implicit frame detection results for conversation nodes"""
+    __tablename__ = "frame_analysis"
+
+    # Identity
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    node_id = Column(UUID(as_uuid=True), ForeignKey('nodes.id'), nullable=False)
+    conversation_id = Column(UUID(as_uuid=True), ForeignKey('conversations.id'), nullable=False)
+
+    # Frame classification
+    frame_type = Column(Text, nullable=False)  # e.g., "market_fundamentalism", "utilitarian"
+    category = Column(Text, nullable=False)    # e.g., "economic", "moral", "political"
+
+    # Analysis results
+    strength = Column(Float, nullable=False)  # 0.0-1.0 (how strongly frame is present)
+    confidence = Column(Float, nullable=False)  # 0.0-1.0 (confidence in detection)
+    description = Column(Text)  # How the frame manifests
+    evidence = Column(JSONB)  # Array of example quotes
+    assumptions = Column(JSONB)  # Array of underlying assumptions
+    implications = Column(Text)  # What this frame implies
+
+    # Metadata
+    analyzed_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index('idx_frame_node', 'node_id'),
+        Index('idx_frame_conversation', 'conversation_id'),
+        Index('idx_frame_type', 'frame_type'),
+        Index('idx_frame_category', 'category'),
+        CheckConstraint('strength >= 0.0 AND strength <= 1.0', name='check_frame_strength'),
+        CheckConstraint('confidence >= 0.0 AND confidence <= 1.0', name='check_frame_confidence'),
+    )

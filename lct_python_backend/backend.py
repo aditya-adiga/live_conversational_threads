@@ -3331,3 +3331,71 @@ async def get_node_biases(node_id: str):
     except Exception as e:
         print(f"[ERROR] Failed to get node biases: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Week 13: Implicit Frame Detection
+# ============================================================================
+
+@lct_app.post("/api/conversations/{conversation_id}/frames/analyze")
+async def analyze_implicit_frames(
+    conversation_id: str,
+    force_reanalysis: bool = False
+):
+    """
+    Analyze all nodes in a conversation for implicit frames
+
+    Query params:
+        force_reanalysis: Re-analyze even if already analyzed
+
+    Returns frame distribution and per-node analysis
+    """
+    try:
+        async with get_session() as session:
+            from services.frame_detector import FrameDetector
+
+            detector = FrameDetector(session)
+            results = await detector.analyze_conversation(
+                conversation_id,
+                force_reanalysis=force_reanalysis
+            )
+
+            return results
+
+    except Exception as e:
+        print(f"[ERROR] Frame analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@lct_app.get("/api/conversations/{conversation_id}/frames")
+async def get_frame_results(conversation_id: str):
+    """Get existing implicit frame analysis results for a conversation"""
+    try:
+        async with get_session() as session:
+            from services.frame_detector import FrameDetector
+
+            detector = FrameDetector(session)
+            results = await detector.get_conversation_results(conversation_id)
+
+            return results
+
+    except Exception as e:
+        print(f"[ERROR] Failed to get frame results: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@lct_app.get("/api/nodes/{node_id}/frames")
+async def get_node_frames(node_id: str):
+    """Get implicit frame analyses for a specific node"""
+    try:
+        async with get_session() as session:
+            from services.frame_detector import FrameDetector
+
+            detector = FrameDetector(session)
+            frames = await detector.get_node_frames(node_id)
+
+            return {"frames": frames}
+
+    except Exception as e:
+        print(f"[ERROR] Failed to get node frames: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

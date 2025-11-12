@@ -7,6 +7,7 @@ import Analytics from "../pages/Analytics";
 import Settings from "../pages/Settings";
 import EditHistory from "../pages/EditHistory";
 import SimulacraAnalysis from "../pages/SimulacraAnalysis";
+import BiasAnalysis from "../pages/BiasAnalysis";
 
 export default function AppRoutes() {
   return (
@@ -18,6 +19,7 @@ export default function AppRoutes() {
       <Route path="/analytics/:conversationId" element={<Analytics />} />
       <Route path="/edit-history/:conversationId" element={<EditHistory />} />
       <Route path="/simulacra/:conversationId" element={<SimulacraAnalysis />} />
+      <Route path="/biases/:conversationId" element={<BiasAnalysis />} />
       <Route path="/settings" element={<Settings />} />
     </Routes>
   );

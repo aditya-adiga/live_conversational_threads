@@ -428,3 +428,35 @@ class SimulacraAnalysis(Base):
         CheckConstraint('level >= 1 AND level <= 4', name='check_simulacra_level'),
         CheckConstraint('confidence >= 0.0 AND confidence <= 1.0', name='check_simulacra_confidence'),
     )
+
+
+class BiasAnalysis(Base):
+    """Cognitive bias detection results for conversation nodes"""
+    __tablename__ = "bias_analysis"
+
+    # Identity
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    node_id = Column(UUID(as_uuid=True), ForeignKey('nodes.id'), nullable=False)
+    conversation_id = Column(UUID(as_uuid=True), ForeignKey('conversations.id'), nullable=False)
+
+    # Bias classification
+    bias_type = Column(Text, nullable=False)  # e.g., "confirmation_bias", "anchoring"
+    category = Column(Text, nullable=False)   # e.g., "confirmation", "decision", "social"
+
+    # Analysis results
+    severity = Column(Float, nullable=False)  # 0.0-1.0 (how severe is this bias)
+    confidence = Column(Float, nullable=False)  # 0.0-1.0 (confidence in detection)
+    description = Column(Text)  # Explanation of how bias manifests
+    evidence = Column(JSONB)  # Array of example quotes
+
+    # Metadata
+    analyzed_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        Index('idx_bias_node', 'node_id'),
+        Index('idx_bias_conversation', 'conversation_id'),
+        Index('idx_bias_type', 'bias_type'),
+        Index('idx_bias_category', 'category'),
+        CheckConstraint('severity >= 0.0 AND severity <= 1.0', name='check_bias_severity'),
+        CheckConstraint('confidence >= 0.0 AND confidence <= 1.0', name='check_bias_confidence'),
+    )

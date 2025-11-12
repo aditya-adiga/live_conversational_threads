@@ -5,6 +5,7 @@ import ViewConversation from "../pages/ViewConversation";
 import Browse from "../pages/Browse";
 import Analytics from "../pages/Analytics";
 import Settings from "../pages/Settings";
+import EditHistory from "../pages/EditHistory";
 
 export default function AppRoutes() {
   return (
@@ -14,6 +15,7 @@ export default function AppRoutes() {
       <Route path="/browse" element={<Browse />} />
       <Route path="/conversation/:conversationId" element={<ViewConversation />} />
       <Route path="/analytics/:conversationId" element={<Analytics />} />
+      <Route path="/edit-history/:conversationId" element={<EditHistory />} />
       <Route path="/settings" element={<Settings />} />
     </Routes>
   );

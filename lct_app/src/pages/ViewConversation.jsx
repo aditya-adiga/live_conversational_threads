@@ -65,14 +65,63 @@ useEffect(() => {
     <div className="flex flex-col h-screen w-screen bg-gradient-to-br from-blue-500 to-purple-600 text-white">
       {/* Header */}
       <div className="w-full px-4 py-4 bg-transparent flex flex-row justify-between items-start md:grid md:grid-cols-3 md:items-center gap-2">
-        {/* Left: Back Button */}
-        <div className="w-full md:w-auto flex justify-start">
+        {/* Left: Back Button & Analysis Menu */}
+        <div className="w-full md:w-auto flex justify-start gap-2">
           <button
             onClick={() => navigate("/browse")}
             className="px-4 py-2 h-10 bg-white text-blue-600 font-semibold rounded-lg shadow hover:bg-blue-100 transition text-sm md:text-base"
           >
             ⬅ Back
           </button>
+
+          {/* Analysis Dropdown */}
+          <div className="relative group">
+            <button
+              className="px-4 py-2 h-10 bg-purple-500 text-white font-semibold rounded-lg shadow hover:bg-purple-600 transition text-sm md:text-base"
+            >
+              Analysis 📊
+            </button>
+
+            {/* Dropdown Menu */}
+            <div className="absolute left-0 mt-2 w-56 bg-white rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+              <div className="py-2">
+                <button
+                  onClick={() => navigate(`/analytics/${conversationId}`)}
+                  className="w-full text-left px-4 py-2 text-gray-700 hover:bg-purple-50 hover:text-purple-600 transition"
+                >
+                  📈 Speaker Analytics
+                </button>
+                <button
+                  onClick={() => navigate(`/edit-history/${conversationId}`)}
+                  className="w-full text-left px-4 py-2 text-gray-700 hover:bg-purple-50 hover:text-purple-600 transition"
+                >
+                  📝 Edit History
+                </button>
+                <hr className="my-2 border-gray-200" />
+                <div className="px-4 py-1 text-xs font-semibold text-gray-500 uppercase">
+                  AI Analysis (Weeks 11-13)
+                </div>
+                <button
+                  onClick={() => navigate(`/simulacra/${conversationId}`)}
+                  className="w-full text-left px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition"
+                >
+                  🎭 Simulacra Levels
+                </button>
+                <button
+                  onClick={() => navigate(`/biases/${conversationId}`)}
+                  className="w-full text-left px-4 py-2 text-gray-700 hover:bg-orange-50 hover:text-orange-600 transition"
+                >
+                  🧠 Cognitive Biases
+                </button>
+                <button
+                  onClick={() => navigate(`/frames/${conversationId}`)}
+                  className="w-full text-left px-4 py-2 text-gray-700 hover:bg-green-50 hover:text-green-600 transition"
+                >
+                  🔍 Implicit Frames
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Center: GenerateFormalism Buttons */}

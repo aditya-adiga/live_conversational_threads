@@ -5,6 +5,12 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/
 // Your web app's Firebase configuration
 // TODO: Replace with your actual Firebase config
 const firebaseConfig = {
+  apiKey: "AIzaSyD_EKMuJBHRwaWUHjWqY-jbHu3Ge8Y_erQ",
+  authDomain: "lct-auth-db7ff.firebaseapp.com",
+  projectId: "lct-auth-db7ff",
+  storageBucket: "lct-auth-db7ff.firebasestorage.app",
+  messagingSenderId: "499845763196",
+  appId: "1:499845763196:web:a4bf8430e1c1147e70f9f9"
 };
 
 // Initialize Firebase

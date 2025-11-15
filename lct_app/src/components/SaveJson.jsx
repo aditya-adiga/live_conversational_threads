@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { saveConversationToServer } from "../utils/SaveConversation";
 
-export default function SaveJson({ chunkDict, graphData, conversationId, setMessage, message, fileName, setFileName }) {
+export default function SaveJson({ chunkDict, graphData, conversationId, setMessage, message, fileName, setFileName, firebaseUid }) {
   
 
   const isSaveDisabled =
-    !chunkDict || Object.keys(chunkDict).length === 0 || !graphData || graphData.length === 0;
+    !chunkDict || Object.keys(chunkDict).length === 0 || !graphData || graphData.length === 0 || !firebaseUid;
 
   const handleSave = async () => {
     if (isSaveDisabled) return;
@@ -24,6 +24,7 @@ export default function SaveJson({ chunkDict, graphData, conversationId, setMess
         chunkDict,
         graphData,
         conversationId,
+        firebaseUid,
       });
 
       setMessage(`Conversation "${newName}" saved. ${result.message}`);
@@ -58,7 +59,7 @@ export default function SaveJson({ chunkDict, graphData, conversationId, setMess
           }`}
         onClick={handleSave}
         disabled={isSaveDisabled}
-        title={isSaveDisabled ? "No data to save" : "Export conversation"}
+        title={isSaveDisabled ? (!firebaseUid ? "Sign in to save" : "No data to save") : "Export conversation"}
       >
         Rename Conversation
       </button>

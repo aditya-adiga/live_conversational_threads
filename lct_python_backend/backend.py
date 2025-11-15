@@ -1,7 +1,7 @@
 import anthropic
 import os
 import json
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from fastapi.staticfiles import StaticFiles
 from websockets.exceptions import ConnectionClosedError
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,9 +26,11 @@ from langchain.schema import HumanMessage, SystemMessage, AIMessage
 # from db_helpers import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
 # from lct_python_backend.db import db
 # from lct_python_backend.db_helpers import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
-# from firestore_db import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
-from lct_python_backend.firestore_db import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
-# from contextlib import asynccontextmanager
+from firestore_db import get_all_conversations_test, insert_conversation_metadata_test, get_conversation_gcs_path_test, share_conversation_test, get_all_accessible_conversations_test, get_conversation_shared_users_test, remove_user_from_conversation_test, get_owned_conversations_test, get_shared_conversations_test
+from firebase_auth import initialize_firebase_admin, verify_firebase_token, get_user_by_email, get_users_by_uids
+# from lct_python_backend.firestore_db import get_all_conversations_test, insert_conversation_metadata_test, get_conversation_gcs_path_test
+# from lct_python_backend.firebase_auth import initialize_firebase_admin, verify_firebase_token
+from contextlib import asynccontextmanager
 # from dotenv import load_dotenv
 
 # load_dotenv() 
@@ -59,7 +61,14 @@ MAX_BATCH_SIZE = 12
     
 # fastapi app
 # lct_app = FastAPI(lifespan=lifespan)
-lct_app = FastAPI()
+
+# Initialize Firebase Admin SDK on startup using FastAPI lifespan event
+@asynccontextmanager
+async def lifespan(app):
+    initialize_firebase_admin()
+    yield
+
+lct_app = FastAPI(lifespan=lifespan)
 
 # Configure CORS
 lct_app.add_middleware(
@@ -71,7 +80,7 @@ lct_app.add_middleware(
 )
 
 # Serve JS/CSS/assets from Vite build folder
-lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
+# lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
 
 
 
@@ -136,6 +145,7 @@ class SaveJsonResponseExtended(BaseModel):
     message: str
     no_of_nodes: int
     created_at: Optional[str]
+    access_type: Optional[str] = None
     
 class ConversationResponse(BaseModel):
     graph_data: List[Any]
@@ -164,6 +174,31 @@ class SaveFactCheckRequest(BaseModel):
     
 class GetFactCheckResponse(BaseModel):
     results: List[AnswerFormat]
+
+class ShareConversationRequest(BaseModel):
+    conversation_id: str
+    emails: List[str]
+
+class ShareConversationResponse(BaseModel):
+    success: bool
+    message: str
+    shared_with: List[str]  # UIDs of users successfully shared with
+    failed_emails: List[str]  # Emails that couldn't be found
+
+class SharedUser(BaseModel):
+    uid: str
+    email: str
+    display_name: Optional[str] = None
+
+class GetSharedUsersResponse(BaseModel):
+    shared_users: List[SharedUser]
+
+class RemoveUserRequest(BaseModel):
+    user_uid: str
+
+class RemoveUserResponse(BaseModel):
+    success: bool
+    message: str
     
 # Function to chunk the text
 def sliding_window_chunking(text: str, chunk_size: int = 10000, overlap: int = 2000) -> Dict[str, str]:
@@ -1711,19 +1746,23 @@ def generate_formalism(chunks: dict, graph_data: dict, user_pref: str) -> List:
 
 # all conversations
 @lct_app.get("/conversations/", response_model=List[SaveJsonResponseExtended])
-async def list_saved_conversations():
+async def list_saved_conversations(current_user: dict = Depends(verify_firebase_token)):
     try:
-        # rows = await get_all_conversations()
-        rows = get_all_conversations()
+        # Get conversations accessible to the user (owned + shared)
+        rows = get_all_accessible_conversations_test(user_uid=current_user['uid'])
         conversations = []
 
         for row in rows:
+            access_type = row.get("access_type", "owner")
+            message = "Owned conversation" if access_type == "owner" else "Shared with you"
+            
             conversations.append({
                 "file_id": str(row["id"]),
                 "file_name": row["file_name"],
-                "message": "Loaded from database",
+                "message": message,
                 "no_of_nodes": row["no_of_nodes"],
-                "created_at": row["created_at"].isoformat() if isinstance(row["created_at"], datetime) else row["created_at"]
+                "created_at": row["created_at"].isoformat() if isinstance(row["created_at"], datetime) else row["created_at"],
+                "access_type": access_type
             })
 
         print(f"[INFO] Loaded {len(conversations)} conversations from DB")
@@ -1731,6 +1770,60 @@ async def list_saved_conversations():
 
     except Exception as e:
         print(f"[FATAL] Error fetching from DB: {e}")
+        raise HTTPException(status_code=500, detail=f"Database access error: {str(e)}")
+
+# owned conversations only
+@lct_app.get("/conversations/owned/", response_model=List[SaveJsonResponseExtended])
+async def list_owned_conversations(current_user: dict = Depends(verify_firebase_token)):
+    try:
+        rows = get_owned_conversations_test(user_uid=current_user['uid'])
+        conversations = []
+
+        for row in rows:
+            conversations.append({
+                "file_id": str(row["id"]),
+                "file_name": row["file_name"],
+                "message": "Owned conversation",
+                "no_of_nodes": row["no_of_nodes"],
+                "created_at": row["created_at"].isoformat() if isinstance(row["created_at"], datetime) else row["created_at"],
+                "access_type": "owner"
+            })
+
+        # Sort by created_at (newest first)
+        conversations.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        
+        print(f"[INFO] Loaded {len(conversations)} owned conversations from DB")
+        return conversations
+
+    except Exception as e:
+        print(f"[FATAL] Error fetching owned conversations from DB: {e}")
+        raise HTTPException(status_code=500, detail=f"Database access error: {str(e)}")
+
+# shared conversations only
+@lct_app.get("/conversations/shared/", response_model=List[SaveJsonResponseExtended])
+async def list_shared_conversations(current_user: dict = Depends(verify_firebase_token)):
+    try:
+        rows = get_shared_conversations_test(user_uid=current_user['uid'])
+        conversations = []
+
+        for row in rows:
+            conversations.append({
+                "file_id": str(row["id"]),
+                "file_name": row["file_name"],
+                "message": "Shared with you",
+                "no_of_nodes": row["no_of_nodes"],
+                "created_at": row["created_at"].isoformat() if isinstance(row["created_at"], datetime) else row["created_at"],
+                "access_type": "shared"
+            })
+
+        # Sort by created_at (newest first)
+        conversations.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        
+        print(f"[INFO] Loaded {len(conversations)} shared conversations from DB")
+        return conversations
+
+    except Exception as e:
+        print(f"[FATAL] Error fetching shared conversations from DB: {e}")
         raise HTTPException(status_code=500, detail=f"Database access error: {str(e)}")
 # def list_saved_conversations():
 #     try:
@@ -1787,12 +1880,12 @@ async def list_saved_conversations():
   
 # get individual conversations 
 @lct_app.get("/conversations/{conversation_id}", response_model=ConversationResponse)
-async def get_conversation(conversation_id: str):
+async def get_conversation(conversation_id: str, current_user: dict = Depends(verify_firebase_token)):
     try:
         # gcs_path = await get_conversation_gcs_path(conversation_id)
-        gcs_path = get_conversation_gcs_path(conversation_id)
+        gcs_path = get_conversation_gcs_path_test(conversation_id, owner_uid=current_user['uid'])
         if not gcs_path:
-            raise HTTPException(status_code=404, detail="Conversation metadata not found in DB.")
+            raise HTTPException(status_code=404, detail="Conversation not found or access denied.")
 
         return load_conversation_from_gcs(gcs_path)
 
@@ -1832,11 +1925,135 @@ async def get_conversation(conversation_id: str):
 #     except Exception as e:
 #         print(f"[FATAL] Error fetching {conversation_id} from GCS: {e}")
 #         raise HTTPException(status_code=500, detail=f"GCS error: {str(e)}")
+
+# Endpoint to share a conversation with other users
+@lct_app.post("/conversations/{conversation_id}/share", response_model=ShareConversationResponse)
+async def share_conversation(
+    conversation_id: str, 
+    request: ShareConversationRequest,
+    current_user: dict = Depends(verify_firebase_token)
+):
+    try:
+        # Validate that the conversation_id in URL matches the one in request body
+        if conversation_id != request.conversation_id:
+            raise HTTPException(status_code=400, detail="Conversation ID mismatch")
+        
+        shared_uids = []
+        failed_emails = []
+        
+        # Get UIDs for each email
+        for email in request.emails:
+            try:
+                user_info = get_user_by_email(email)
+                if user_info['email_verified']:
+                    shared_uids.append(user_info['uid'])
+                else:
+                    failed_emails.append(email)
+                    print(f"[WARNING] User {email} email not verified")
+            except HTTPException as e:
+                if e.status_code == 404:
+                    failed_emails.append(email)
+                    print(f"[WARNING] User not found: {email}")
+                else:
+                    raise e
+        
+        # Share the conversation if we have valid UIDs
+        if shared_uids:
+            success = share_conversation_test(
+                conversation_id=conversation_id,
+                owner_uid=current_user['uid'],
+                shared_uids=shared_uids
+            )
+            
+            if not success:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Conversation not found or you don't have permission to share it"
+                )
+        
+        return ShareConversationResponse(
+            success=len(shared_uids) > 0,
+            message=f"Conversation shared with {len(shared_uids)} users. {len(failed_emails)} emails failed.",
+            shared_with=shared_uids,
+            failed_emails=failed_emails
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Error sharing conversation: {e}")
+        raise HTTPException(status_code=500, detail="Failed to share conversation")
+
+
+# Endpoint to get users that a conversation is shared with
+@lct_app.get("/conversations/{conversation_id}/shared-users", response_model=GetSharedUsersResponse)
+async def get_shared_users(
+    conversation_id: str,
+    current_user: dict = Depends(verify_firebase_token)
+):
+    try:
+        # Get the list of UIDs the conversation is shared with
+        shared_uids = get_conversation_shared_users_test(conversation_id, current_user['uid'])
+        
+        if not shared_uids:
+            return GetSharedUsersResponse(shared_users=[])
+        
+        # Get user details for each UID
+        users_data = get_users_by_uids(shared_uids)
+        
+        shared_users = [
+            SharedUser(
+                uid=user['uid'],
+                email=user['email'],
+                display_name=user['display_name']
+            )
+            for user in users_data
+        ]
+        
+        return GetSharedUsersResponse(shared_users=shared_users)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Error getting shared users: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get shared users")
+
+
+# Endpoint to remove a user from conversation sharing
+@lct_app.delete("/conversations/{conversation_id}/shared-users", response_model=RemoveUserResponse)
+async def remove_shared_user(
+    conversation_id: str,
+    request: RemoveUserRequest,
+    current_user: dict = Depends(verify_firebase_token)
+):
+    try:
+        success = remove_user_from_conversation_test(
+            conversation_id=conversation_id,
+            owner_uid=current_user['uid'],
+            user_uid_to_remove=request.user_uid
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=403,
+                detail="Conversation not found, you don't have permission, or user was not shared with"
+            )
+        
+        return RemoveUserResponse(
+            success=True,
+            message="User removed from conversation sharing"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Error removing shared user: {e}")
+        raise HTTPException(status_code=500, detail="Failed to remove user from sharing")
     
     
 # Endpoint to get transcript chunks
 @lct_app.post("/get_chunks/", response_model=ChunkedTranscript)
-async def get_chunks(request: TranscriptRequest):
+async def get_chunks(request: TranscriptRequest, current_user: dict = Depends(verify_firebase_token)):
     try:
         transcript = request.transcript
 
@@ -1855,7 +2072,7 @@ async def get_chunks(request: TranscriptRequest):
 
 # Streaming Endpoint for JSON generation
 @lct_app.post("/generate-context-stream/")
-async def generate_context_stream(request: ChunkedRequest):
+async def generate_context_stream(request: ChunkedRequest, current_user: dict = Depends(verify_firebase_token)):
     try:
         chunks = request.chunks
 
@@ -1868,7 +2085,7 @@ async def generate_context_stream(request: ChunkedRequest):
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
     
 @lct_app.post("/save_json/", response_model=SaveJsonResponse)
-async def save_json_call(request: SaveJsonRequest):
+async def save_json_call(request: SaveJsonRequest, current_user: dict = Depends(verify_firebase_token)):
     """
     FastAPI route to save JSON data and insert metadata into the DB.
     """
@@ -1890,7 +2107,7 @@ async def save_json_call(request: SaveJsonRequest):
         except Exception as file_error:
             raise HTTPException(status_code=500, detail=f"File saving error: {str(file_error)}")
 
-        # Insert metadata into DB
+        # Insert metadata into DB with owner_uid
         number_of_nodes = len(request.graph_data[0]) if request.graph_data and isinstance(request.graph_data[0], list) else 0
         print("graph data check: ", request.graph_data)
         print("number of nodes: ", len(request.graph_data[0]) if request.graph_data and isinstance(request.graph_data[0], list) else 0)
@@ -1899,12 +2116,14 @@ async def save_json_call(request: SaveJsonRequest):
             "file_name": result["file_name"],
             "no_of_nodes": number_of_nodes,
             "gcs_path": result["gcs_path"],
-            "created_at": datetime.utcnow()
+            "created_at": datetime.utcnow(),
+            "owner_uid": current_user['uid']  # Add owner_uid from authenticated user
         }
 
         # await insert_conversation_metadata(metadata)
-        insert_conversation_metadata(metadata)
+        insert_conversation_metadata_test(metadata)
 
+        print(f"[INFO] Conversation saved for user {current_user['uid']}: {result['file_id']}")
         return result
 
     except HTTPException as http_err:
@@ -1939,7 +2158,7 @@ async def save_json_call(request: SaveJsonRequest):
 #         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
     
 @lct_app.post("/generate_formalism/", response_model=generateFormalismResponse)
-async def generate_formalism_call(request: generateFormalismRequest):
+async def generate_formalism_call(request: generateFormalismRequest, current_user: dict = Depends(verify_firebase_token)):
     try:
         # Validate input data
         if not isinstance(request.chunks, dict) or not isinstance(request.graph_data, List):
@@ -2220,25 +2439,25 @@ async def fact_check_claims_call(request: FactCheckRequest):
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 # Serve index.html at root
-@lct_app.get("/")
-def read_root():
-    return FileResponse("frontend_dist/index.html")
+# @lct_app.get("/")
+# def read_root():
+#     return FileResponse("frontend_dist/index.html")
 
-# Serve favicon or other top-level static files
-@lct_app.get("/favicon.ico")
-def favicon():
-    file_path = "frontend_dist/favicon.ico"
-    if os.path.exists(file_path):
-        return FileResponse(file_path)
-    return {}
+# # Serve favicon or other top-level static files
+# @lct_app.get("/favicon.ico")
+# def favicon():
+#     file_path = "frontend_dist/favicon.ico"
+#     if os.path.exists(file_path):
+#         return FileResponse(file_path)
+#     return {}
 
-# Catch-all for SPA routes (NOT static files)
-@lct_app.get("/{full_path:path}")
-async def spa_router(full_path: str):
-    file_path = f"frontend_dist/{full_path}"
-    if os.path.exists(file_path):
-        return FileResponse(file_path)
-    return FileResponse("frontend_dist/index.html")
+# # Catch-all for SPA routes (NOT static files)
+# @lct_app.get("/{full_path:path}")
+# async def spa_router(full_path: str):
+#     file_path = f"frontend_dist/{full_path}"
+#     if os.path.exists(file_path):
+#         return FileResponse(file_path)
+#     return FileResponse("frontend_dist/index.html")
 
 
 # @lct_app.post("/save_fact_check/")

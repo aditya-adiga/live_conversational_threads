@@ -156,3 +156,5 @@ Thumbs.db
 .node_repl_history
 
 .gitignore
+
+lct_python_backend/serviceAccountKey.json

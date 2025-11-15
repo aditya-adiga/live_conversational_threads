@@ -11,6 +11,8 @@ import GenerateFormalism from "../components/GenerateFormalism";
 import FormalismList from "../components/FormalismList";
 import FormalismCanvas from "../components/FormalismCanvas";
 import AuthButton from "../components/AuthButton";
+import { useAuth } from "../contexts/AuthContext";
+import { getUserConversation } from "../utils/api";
 
 export default function ViewConversation() {
   const [graphData, setGraphData] = useState([]); // Stores graph data
@@ -26,17 +28,16 @@ export default function ViewConversation() {
   const [isFullScreen, setIsFullScreen] = useState(false); // full screen status
 
 const { conversationId } = useParams();
-
+const { currentUser } = useAuth();
 const navigate = useNavigate();
 
-const API_URL = import.meta.env.VITE_API_URL || "";
-
 useEffect(() => {
-  if (!conversationId) return;
+  if (!conversationId || !currentUser) return;
 
-  fetch(`${API_URL}/conversations/${conversationId}`)
-    .then((res) => res.json())
-    .then((data) => {
+  const loadConversation = async () => {
+    try {
+      const data = await getUserConversation(conversationId);
+      
       if (data.graph_data) {
         setGraphData((prevGraphData) => {
           // If no previous data, just use new data
@@ -49,11 +50,17 @@ useEffect(() => {
         });
       }
       if (data.chunk_dict) setChunkDict(data.chunk_dict);
-    })
-    .catch((err) => {
+    } catch (err) {
       console.error("Failed to load conversation:", err);
-    });
-}, [conversationId]);
+      if (err.message.includes('Authentication failed')) {
+        // Redirect to login if authentication fails
+        navigate('/login');
+      }
+    }
+  };
+
+  loadConversation();
+}, [conversationId, currentUser, navigate]);
 
 // Helper function to preserve user annotations when receiving backend updates
 const mergeGraphDataWithUserAnnotations = (currentData, incomingData) => {

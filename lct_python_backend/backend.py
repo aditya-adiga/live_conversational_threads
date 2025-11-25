@@ -632,7 +632,7 @@ def generate_lct_json_gemini(
 ):
     
     client = genai.Client(api_key=GOOGLEAI_API_KEY)
-    model = "gemini-2.5-flash-preview-05-20"
+    model = "gemini-2.5-flash"
 
     generate_lct_prompt = """You are an advanced AI model that structures conversations into strictly JSON-formatted nodes. Each conversational shift should be captured as a new node with defined relationships, with primary emphasis on capturing rich contextual connections that demonstrate thematic coherence, conceptual evolution, and cross-conversational idea building.
 **Formatting Rules:**

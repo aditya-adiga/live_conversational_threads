@@ -26,10 +26,10 @@ from langchain.schema import HumanMessage, SystemMessage, AIMessage
 # from db_helpers import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
 # from lct_python_backend.db import db
 # from lct_python_backend.db_helpers import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
-from firestore_db import get_all_conversations_test, insert_conversation_metadata_test, get_conversation_gcs_path_test, share_conversation_test, get_all_accessible_conversations_test, get_conversation_shared_users_test, remove_user_from_conversation_test, get_owned_conversations_test, get_shared_conversations_test
-from firebase_auth import initialize_firebase_admin, verify_firebase_token, get_user_by_email, get_users_by_uids
-# from lct_python_backend.firestore_db import get_all_conversations_test, insert_conversation_metadata_test, get_conversation_gcs_path_test
-# from lct_python_backend.firebase_auth import initialize_firebase_admin, verify_firebase_token
+# from firestore_db import get_all_conversations_test, insert_conversation_metadata_test, get_conversation_gcs_path_test, share_conversation_test, get_all_accessible_conversations_test, get_conversation_shared_users_test, remove_user_from_conversation_test, get_owned_conversations_test, get_shared_conversations_test
+# from firebase_auth import initialize_firebase_admin, verify_firebase_token, get_user_by_email, get_users_by_uids
+from lct_python_backend.firestore_db import get_all_conversations_test, insert_conversation_metadata_test, get_conversation_gcs_path_test, share_conversation_test, get_all_accessible_conversations_test, get_conversation_shared_users_test, remove_user_from_conversation_test, get_owned_conversations_test, get_shared_conversations_test
+from lct_python_backend.firebase_auth import initialize_firebase_admin, verify_firebase_token, get_user_by_email, get_users_by_uids
 from contextlib import asynccontextmanager
 # from dotenv import load_dotenv
 
@@ -80,7 +80,7 @@ lct_app.add_middleware(
 )
 
 # Serve JS/CSS/assets from Vite build folder
-# lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
+lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
 
 
 
@@ -2439,25 +2439,25 @@ async def fact_check_claims_call(request: FactCheckRequest):
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
 # Serve index.html at root
-# @lct_app.get("/")
-# def read_root():
-#     return FileResponse("frontend_dist/index.html")
+@lct_app.get("/")
+def read_root():
+    return FileResponse("frontend_dist/index.html")
 
-# # Serve favicon or other top-level static files
-# @lct_app.get("/favicon.ico")
-# def favicon():
-#     file_path = "frontend_dist/favicon.ico"
-#     if os.path.exists(file_path):
-#         return FileResponse(file_path)
-#     return {}
+# Serve favicon or other top-level static files
+@lct_app.get("/favicon.ico")
+def favicon():
+    file_path = "frontend_dist/favicon.ico"
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    return {}
 
-# # Catch-all for SPA routes (NOT static files)
-# @lct_app.get("/{full_path:path}")
-# async def spa_router(full_path: str):
-#     file_path = f"frontend_dist/{full_path}"
-#     if os.path.exists(file_path):
-#         return FileResponse(file_path)
-#     return FileResponse("frontend_dist/index.html")
+# Catch-all for SPA routes (NOT static files)
+@lct_app.get("/{full_path:path}")
+async def spa_router(full_path: str):
+    file_path = f"frontend_dist/{full_path}"
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    return FileResponse("frontend_dist/index.html")
 
 
 # @lct_app.post("/save_fact_check/")

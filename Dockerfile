@@ -10,7 +10,7 @@
     RUN npm install && npm run build
     
     # Debug: Print frontend dist contents
-    RUN echo "✅ Contents of dist folder:" && ls -l dist && echo "✅ Contents of dist/assets:" && ls -l dist/assets
+    RUN echo "Contents of dist folder:" && ls -l dist && echo "Contents of dist/assets:" && ls -l dist/assets
     
     
     # --------- Backend Final Stage ---------
@@ -29,7 +29,7 @@
     COPY --from=frontend-builder /app/lct_app/dist/ ./frontend_dist/
     
     # Debug: Confirm frontend_dist structure
-    RUN echo "✅ Final frontend_dist contents:" && ls -l frontend_dist && echo "✅ frontend_dist/assets:" && ls -l frontend_dist/assets
+    RUN echo "Final frontend_dist contents:" && ls -l frontend_dist && echo "frontend_dist/assets:" && ls -l frontend_dist/assets
     
     # Set runtime port
     ENV PORT=8080

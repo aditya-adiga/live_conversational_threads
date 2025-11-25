@@ -166,3 +166,7 @@ ENV/
 # Project specific
 /saved_json/
 /prompts_and_transcripts/
+/notebooks/
+
+# service account key
+lct_python_backend/serviceAccountKey.json

@@ -1,0 +1,160 @@
+# ============================================
+# DEVELOPMENT AND BUILD ARTIFACTS
+# ============================================
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Diagnostic reports (https://nodejs.org/api/report.html)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage reports
+coverage
+*.lcov
+.nyc_output
+
+# Build outputs and caches
+dist/
+build/
+out/
+.next/
+.nuxt/
+.vuepress/dist
+**/.vitepress/dist
+.docusaurus/
+
+# Cache directories
+.cache/
+.parcel-cache/
+**/.vitepress/cache/
+.temp/
+.grunt/
+.fusebox/
+.dynamodb/
+
+# ============================================
+# DEPENDENCY DIRECTORIES
+# ============================================
+
+# Node.js dependencies
+node_modules/
+jspm_packages/
+web_modules/
+bower_components/
+
+# Python dependencies and environments
+venv/
+env/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+
+# Yarn v2+
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+.pnp.*
+
+# ============================================
+# DEVELOPMENT TOOLS AND CONFIGS
+# ============================================
+
+# Environment files
+.env*
+!.env.example
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing and linting
+.eslintcache
+.stylelintcache
+.yarn-integrity
+
+# TypeScript and bundler caches
+*.tsbuildinfo
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Package manager caches
+.npm/
+
+# Serverless and cloud
+.serverless/
+
+# VSCode extension testing
+.vscode-test
+
+# TernJS
+.tern-port
+
+# ============================================
+# PROJECT-SPECIFIC DIRECTORIES
+# ============================================
+
+# Application data and artifacts
+/saved_json/
+/prompts_and_transcripts/
+/notebooks/
+lct_python_backend/notebooks/
+lct_python_backend/__pycache__/
+
+# Build artifacts (keep in respective directories)
+/lct_app/dist/
+/lct_python_backend/dist/
+/lct_python_backend/build/
+
+# ============================================
+# MISCELLANEOUS
+# ============================================
+
+# Archives and packages
+*.tgz
+*.tar.gz
+*.zip
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Node REPL history
+.node_repl_history
+
+.gitignore
+
+lct_python_backend/serviceAccountKey.json

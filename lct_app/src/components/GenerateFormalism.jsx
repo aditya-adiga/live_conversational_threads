@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { authenticatedFetch } from "../utils/api";
 
 export default function GenerateFormalism({
   chunkDict,
@@ -27,18 +28,13 @@ export default function GenerateFormalism({
     setIsLoading(true);
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || "";
-      const response = await fetch(
-        `${API_URL}/generate_formalism/`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify(dataForFormalism),
-        }
-      );
+      const response = await authenticatedFetch("/generate_formalism/", {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+        },
+        body: JSON.stringify(dataForFormalism),
+      });
 
       if (!response.ok) throw new Error("Failed to generate formalisms");
 
@@ -128,7 +124,7 @@ export default function GenerateFormalism({
       {isDialogOpen && (
         <div
           ref={dialogRef}
-          className="absolute top-[110%] right-0 bg-white text-black p-4 rounded-lg shadow-xl border w-[90vw] sm:w-[24rem] max-h-[70vh] overflow-auto z-20"
+          className="absolute top-[110%] left-1/2 transform -translate-x-1/2 sm:left-auto sm:right-0 sm:transform-none sm:translate-x-0 bg-white text-black p-4 rounded-lg shadow-xl border w-[90vw] sm:w-[24rem] max-w-[350px] max-h-[70vh] overflow-auto z-80"
         >
           <h2 className="text-lg font-bold mb-3">
             Enter your research interests

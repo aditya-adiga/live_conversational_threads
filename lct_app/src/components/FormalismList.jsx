@@ -5,6 +5,7 @@ export default function FormalismList({
   setSelectedFormalism,
   formalismData,
   setSelectedLoopyURL,
+  setSelectedFormalismProof,
 }) {
   const [formalisms, setFormalisms] = useState([]);
 
@@ -26,9 +27,10 @@ export default function FormalismList({
       (data) => data.formalism_node === item
     );
 
-    // If found, send the loopy URL to the parent
+    // If found, send the loopy URL and formalism proof to the parent
     if (selectedItem) {
       setSelectedLoopyURL(selectedItem.formalism_graph_url);
+      setSelectedFormalismProof(selectedItem.formal_proof);
     }
   };
 

@@ -9,6 +9,10 @@ import SaveTranscript from "../components/SaveTranscript";
 import Legend from "../components/Legend";
 import GenerateFormalism from "../components/GenerateFormalism";
 import FormalismList from "../components/FormalismList";
+import FormalismCanvas from "../components/FormalismCanvas";
+import AuthButton from "../components/AuthButton";
+import { useAuth } from "../contexts/AuthContext";
+import { getUserConversation } from "../utils/api";
 
 export default function ViewConversation() {
   const [graphData, setGraphData] = useState([]); // Stores graph data
@@ -18,28 +22,70 @@ export default function ViewConversation() {
   const [selectedFormalism, setSelectedFormalism] = useState(null); // stores selected formalism
   const [formalismData, setFormalismData] = useState({}); // Stores Formalism data
   const [selectedLoopyURL, setSelectedLoopyURL] = useState(""); // Stores Loopy URL
+  const [selectedFormalismProof, setSelectedFormalismProof] = useState(""); // Stores Formalism Proof
+
   // const [message, setMessage] = useState(""); // message for saving conversation
   const [isFullScreen, setIsFullScreen] = useState(false); // full screen status
 
 const { conversationId } = useParams();
-
+const { currentUser } = useAuth();
 const navigate = useNavigate();
 
-const API_URL = import.meta.env.VITE_API_URL || "";
-
 useEffect(() => {
-  if (!conversationId) return;
+  if (!conversationId || !currentUser) return;
 
-  fetch(`${API_URL}/conversations/${conversationId}`)
-    .then((res) => res.json())
-    .then((data) => {
-      if (data.graph_data) setGraphData(data.graph_data);
+  const loadConversation = async () => {
+    try {
+      const data = await getUserConversation(conversationId);
+      
+      if (data.graph_data) {
+        setGraphData((prevGraphData) => {
+          // If no previous data, just use new data
+          if (!prevGraphData || prevGraphData.length === 0) {
+            return data.graph_data;
+          }
+
+          // Merge new data with existing user annotations
+          return mergeGraphDataWithUserAnnotations(prevGraphData, data.graph_data);
+        });
+      }
       if (data.chunk_dict) setChunkDict(data.chunk_dict);
-    })
-    .catch((err) => {
+    } catch (err) {
       console.error("Failed to load conversation:", err);
+      if (err.message.includes('Authentication failed')) {
+        // Redirect to login if authentication fails
+        navigate('/login');
+      }
+    }
+  };
+
+  loadConversation();
+}, [conversationId, currentUser, navigate]);
+
+// Helper function to preserve user annotations when receiving backend updates
+const mergeGraphDataWithUserAnnotations = (currentData, incomingData) => {
+  if (!incomingData || incomingData.length === 0) return currentData;
+  
+  return incomingData.map((incomingChunk, chunkIndex) => {
+    const currentChunk = currentData[chunkIndex] || [];
+    
+    return incomingChunk.map((incomingNode) => {
+      const currentNode = currentChunk.find(node => node.node_name === incomingNode.node_name);
+      
+      if (currentNode) {
+        // Preserve user annotations from current node
+        return {
+          ...incomingNode,
+          is_contextual_progress: currentNode.is_contextual_progress || incomingNode.is_contextual_progress,
+          is_bookmark: currentNode.is_bookmark || incomingNode.is_bookmark,
+          claims_checked: currentNode.claims_checked || incomingNode.claims_checked,
+        };
+      }
+      
+      return incomingNode;
     });
-}, [conversationId]);
+  });
+};
 
 useEffect(() => {
   setIsFullScreen(true); // Trigger fullscreen on load
@@ -48,19 +94,19 @@ useEffect(() => {
   return (
     <div className="flex flex-col h-screen w-screen bg-gradient-to-br from-blue-500 to-purple-600 text-white">
       {/* Header */}
-      <div className="w-full px-4 py-4 bg-transparent flex flex-row justify-between items-start md:grid md:grid-cols-3 md:items-center gap-2">
+      <div className="w-full px-4 py-4 bg-transparent flex flex-row justify-between items-start md:grid md:grid-cols-4 md:items-center gap-2">
         {/* Left: Back Button */}
         <div className="w-full md:w-auto flex justify-start">
           <button
             onClick={() => navigate("/browse")}
             className="px-4 py-2 h-10 bg-white text-blue-600 font-semibold rounded-lg shadow hover:bg-blue-100 transition text-sm md:text-base"
           >
-            ⬅ Back
+            ⬅ Exit
           </button>
         </div>
 
         {/* Center: GenerateFormalism Buttons */}
-        <div className="w-full md:w-auto flex justify-end md:justify-center">
+        <div className="w-full md:w-auto flex justify-end md:justify-center md:col-span-2">
           <div className="flex flex-col md:flex-row items-end md:items-center gap-2">
             <GenerateFormalism
               chunkDict={chunkDict}
@@ -73,12 +119,16 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* Right: Save Transcript (desktop only) */}
-        {graphData.length > 0 && (
-          <div className="hidden md:flex justify-end w-full">
-            <SaveTranscript chunkDict={chunkDict} />
-          </div>
-        )}
+        {/* Right: Auth Button and Save Transcript */}
+        <div className="hidden md:flex justify-end w-full items-center gap-2">
+          {graphData.length > 0 && <SaveTranscript chunkDict={chunkDict} />}
+          <AuthButton />
+        </div>
+
+        {/* Mobile: Auth Button */}
+        <div className="md:hidden flex-shrink-0">
+          <AuthButton />
+        </div>
       </div>
 
       {!isFormalismView ? (
@@ -121,8 +171,8 @@ useEffect(() => {
                 selectedFormalism={selectedFormalism}
                 setSelectedFormalism={setSelectedFormalism}
                 formalismData={formalismData}
-                setFormalismData={setFormalismData}
                 setSelectedLoopyURL={setSelectedLoopyURL}
+                setSelectedFormalismProof={setSelectedFormalismProof}
               />
             </div>
 
@@ -141,23 +191,10 @@ useEffect(() => {
           </div>
 
           {/* Bottom - Canvas */}
-          <div className="bg-white rounded-lg shadow-lg p-4 flex flex-col flex-grow">
-            <h2 className="text-xl font-bold text-gray-800 text-center mb-2">
-              Formalism Model Diagram
-            </h2>
-
-            <div className="flex-1 flex items-center justify-center">
-              <button
-                onClick={() => {
-                  const url = selectedLoopyURL || "https://ncase.me/loopy/";
-                  window.open(url, "_blank");
-                }}
-                className="px-6 py-3 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700 transition-colors"
-              >
-                {selectedLoopyURL ? "View Model" : "Open Loopy Editor"}
-              </button>
-            </div>
-          </div>
+          <FormalismCanvas 
+            selectedLoopyURL={selectedLoopyURL}
+            selectedFormalismProof={selectedFormalismProof}
+          />
         </div>
       )}
 

@@ -1,7 +1,7 @@
 import anthropic
 import os
 import json
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from fastapi.staticfiles import StaticFiles
 from websockets.exceptions import ConnectionClosedError
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,10 +19,17 @@ from google.genai import types
 from pathlib import Path
 from google.cloud import storage
 from datetime import datetime
+import urllib.parse
+from langchain_openai import ChatOpenAI
+from langchain.schema import HumanMessage, SystemMessage, AIMessage
 # from db import db
 # from db_helpers import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
-from lct_python_backend.db import db
-from lct_python_backend.db_helpers import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
+# from lct_python_backend.db import db
+# from lct_python_backend.db_helpers import get_all_conversations, insert_conversation_metadata, get_conversation_gcs_path
+# from firestore_db import get_all_conversations_test, insert_conversation_metadata_test, get_conversation_gcs_path_test, share_conversation_test, get_all_accessible_conversations_test, get_conversation_shared_users_test, remove_user_from_conversation_test, get_owned_conversations_test, get_shared_conversations_test
+# from firebase_auth import initialize_firebase_admin, verify_firebase_token, get_user_by_email, get_users_by_uids
+from lct_python_backend.firestore_db import get_all_conversations_test, insert_conversation_metadata_test, get_conversation_gcs_path_test, share_conversation_test, get_all_accessible_conversations_test, get_conversation_shared_users_test, remove_user_from_conversation_test, get_owned_conversations_test, get_shared_conversations_test
+from lct_python_backend.firebase_auth import initialize_firebase_admin, verify_firebase_token, get_user_by_email, get_users_by_uids
 from contextlib import asynccontextmanager
 # from dotenv import load_dotenv
 
@@ -37,22 +44,30 @@ MAX_BATCH_SIZE = 12
 # SAVE_DIRECTORY = "../saved_json"
 
 # db
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    print("[INFO] Connecting to database...")
-    try:
-        await db.connect()
-        print("[INFO] Connected to database.")
-    except Exception as e:
-        print("[ERROR] Failed to connect to database during startup:")
-        import traceback
-        traceback.print_exc()
-        raise e  # re-raise so the app still fails, but now you see why
-    yield
-    print("[INFO] Disconnecting from database...")
-    await db.disconnect()
+# @asynccontextmanager
+# async def lifespan(app: FastAPI):
+#     print("[INFO] Connecting to database...")
+#     try:
+#         await db.connect()
+#         print("[INFO] Connected to database.")
+#     except Exception as e:
+#         print("[ERROR] Failed to connect to database during startup:")
+#         import traceback
+#         traceback.print_exc()
+#         raise e  # re-raise so the app still fails, but now you see why
+#     yield
+#     print("[INFO] Disconnecting from database...")
+#     await db.disconnect()
     
 # fastapi app
+# lct_app = FastAPI(lifespan=lifespan)
+
+# Initialize Firebase Admin SDK on startup using FastAPI lifespan event
+@asynccontextmanager
+async def lifespan(app):
+    initialize_firebase_admin()
+    yield
+
 lct_app = FastAPI(lifespan=lifespan)
 
 # Configure CORS
@@ -65,7 +80,7 @@ lct_app.add_middleware(
 )
 
 # Serve JS/CSS/assets from Vite build folder
-# lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
+lct_app.mount("/assets", StaticFiles(directory="frontend_dist/assets"), name="assets")
 
 
 
@@ -85,6 +100,8 @@ GOOGLEAI_API_KEY = os.getenv("GOOGLEAI_API_KEY")
 GCS_BUCKET_NAME = os.getenv("GCS_BUCKET_NAME")
 
 GCS_FOLDER = os.getenv("GCS_FOLDER")
+
+VITE_API_URL = os.getenv("VITE_API_URL")
 
 
 PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
@@ -128,6 +145,7 @@ class SaveJsonResponseExtended(BaseModel):
     message: str
     no_of_nodes: int
     created_at: Optional[str]
+    access_type: Optional[str] = None
     
 class ConversationResponse(BaseModel):
     graph_data: List[Any]
@@ -156,6 +174,31 @@ class SaveFactCheckRequest(BaseModel):
     
 class GetFactCheckResponse(BaseModel):
     results: List[AnswerFormat]
+
+class ShareConversationRequest(BaseModel):
+    conversation_id: str
+    emails: List[str]
+
+class ShareConversationResponse(BaseModel):
+    success: bool
+    message: str
+    shared_with: List[str]  # UIDs of users successfully shared with
+    failed_emails: List[str]  # Emails that couldn't be found
+
+class SharedUser(BaseModel):
+    uid: str
+    email: str
+    display_name: Optional[str] = None
+
+class GetSharedUsersResponse(BaseModel):
+    shared_users: List[SharedUser]
+
+class RemoveUserRequest(BaseModel):
+    user_uid: str
+
+class RemoveUserResponse(BaseModel):
+    success: bool
+    message: str
     
 # Function to chunk the text
 def sliding_window_chunking(text: str, chunk_size: int = 10000, overlap: int = 2000) -> Dict[str, str]:
@@ -589,7 +632,7 @@ def generate_lct_json_gemini(
 ):
     
     client = genai.Client(api_key=GOOGLEAI_API_KEY)
-    model = "gemini-2.5-flash-preview-05-20"
+    model = "gemini-2.5-flash"
 
     generate_lct_prompt = """You are an advanced AI model that structures conversations into strictly JSON-formatted nodes. Each conversational shift should be captured as a new node with defined relationships, with primary emphasis on capturing rich contextual connections that demonstrate thematic coherence, conceptual evolution, and cross-conversational idea building.
 **Formatting Rules:**
@@ -672,6 +715,8 @@ If a topic is revisited, create a new node while ensuring proper linking to prev
 
 Each node must include both "predecessor" and "successor" fields to maintain chronological flow, maintaining the flow of the conversation irrespective of how related the topics are and strictly based on temporal relationship.
 
+**VERY STRICTLY** only the first node should have predecessor as null and the last node should have successor as null
+
 **Conversational Threads nodes(“is_bookmark”: false):**
 - Every topic shift must be captured as a new node.
 - "contextual_relation" must provide integrated explanations of how previous discussions contribute to the current conversation through thematic connections, conceptual evolution, and idea building.
@@ -697,9 +742,8 @@ o	"is_contextual_progress": true
 -	Do not create a new node for contextual progress capture. Instead, apply the flag to the relevant existing node where the potential insight was introduced or referenced.
 -**Contextual Relation & Linked Nodes Updates:**
 - "contextual_relation" must provide comprehensive, integrated explanations that demonstrate the full scope of how nodes relate through thematic coherence, conceptual development, and cross-conversational idea building as unified relationship narratives.
-- Don’t capture direct shifts in conversations as contextual_relation unless there is a relevant contextual relation only then capture it.
+- **VERY STRICTLY** Don’t capture direct shifts in conversations as contextual_relation unless there is a relevant contextual relation only then capture it. Direct transitions are “NOT” contextual_relation.
 - "linked_nodes" must include all references in a single list, capturing all nodes this node draws from or informs.
-- The structure of "predecessor", "successor", and "contextual_relation" must ensure logical and chronological consistency between past and present discussions.
 - The structure of "predecessor", "successor", and "contextual_relation" must ensure logical and chronological consistency between past and present discussions.
 
 **Example Input**
@@ -966,7 +1010,7 @@ def genai_accumulate_text_json(
     retries: int = 3,
     backoff_base: float = 1.5
 ):
-    model_name = "gemini-2.5-flash-preview-05-20"
+    model_name = "gemini-2.5-flash"
 
     system_prompt = """You are an expert conversation analyst and advanced AI reasoning assistant. I will provide you with a block of accumulated transcript text. Your task is to determine whether this text contains at least one complete and self-contained conversational thread, and if so, return all complete threads while leaving any incomplete ones for future accumulation.
 Definition:
@@ -1134,104 +1178,299 @@ Evaluation Notes:
 
 #     return None  # If all attempts fail
 
-def generate_individual_formalism(formalism_input: str, temp: float = 0.7, retries: int = 5, backoff_base: float = 1.5):
-    generate_formalism_prompt ="You are an advanced AI model tasked with transforming structured conversational data and raw text into a concise causal loop diagram (CLD) represented as a dictionary with LOOPY-compatible structure. Your goal is to dynamically infer the relationships between topics discussed in the conversation and convert them into a causal loop diagram, with special focus on extracting formalism in the contextual progress of the conversation.\n\nYou will be provided with three inputs:\n1. conversation_data\n2. raw_text\n3. user_research_background - A description of the user's research interests and background\n\nAnalyze the conversation_data and raw_text to identify causal relationships and create a comprehensive causal loop diagram that aligns with the user's research background.\n\nOutput Format:\nYou must strictly return a dictionary in the following format:\n[\n  [\n    [id, x, y, init, label, color] # this is for nodes,\n    ...\n  ],\n  [\n    [from, to,arc,strength, _] # this is for the edges,\n    ...\n  ],\n  [\n    [x, y, text] # this is for the labels,\n    ...\n  ],\n  meta # this is the meta an integer\n]\n\ntypes of the about output format:\nnode = id - int, x - int, y -int, init - float(always 1), color- int.\nedges= from - int, to - int, arc - int, strength - float, _ = 0.\nlabels= x - int, y - int, text- str.\nmeta - int.\nWhere:\n- meta is the total number of nodes + labels + 2 (for edges).\n- Node id is a unique integer starting from 0.\n- Edges: Each edge refers to valid id values for from and to.\n- Assign random integers to color for different nodes but the integers assigned should be less than total number of nodes divided by 1.5.\n\nIMPORTANT: Only create nodes that have at least one causal relationship (edge) with another node. Do not include isolated nodes without any connecting edges.\n\nCRITICAL: Ensure that your diagram contains at least one complete causal loop where nodes are connected in a cycle (A→B→C→A or similar). The edges in these loops must form a complete circuit so that changes in any node propagate through the entire loop and affect the originating node. These must be genuine loops with actual causal connections, not just visually arranged in a circle.\n\nPRIMARY FOCUS: Prioritize identifying and extracting formalism in the contextual progress of the conversation. Examine how concepts, theories, methods, or structured approaches develop and influence each other throughout the conversation. Only include other nodes if they directly relate to this formalism development.\n\nRESEARCH CONTEXT ALIGNMENT: Frame all node labels, relationships, and concepts using terminology and perspectives relevant to the user's research background. The variables and causal connections should reflect the user's domain of expertise and research interests, making the diagram immediately relevant and intuitive to their field of study.\n\nLoop Detection and Construction:\nActively search for and construct complete causal loops in the conversation:\n- Reinforcing loops: Create cycles where changes amplify around the loop (e.g., A increases B, B increases C, C increases A).\n- Balancing loops: Create cycles that tend to stabilize (e.g., A increases B, B increases C, C decreases A).\n- Make sure every loop is complete with no breaks in the causal chain.\n- Test each loop by mentally tracing the effects: if one node increases, trace the effects through each connection to verify the loop completes and affects the original node.\n\nCausal Relation Detection:\nIdentify and infer causal relationships implicitly from the conversational context, summaries, and shifts between topics. Look for the following:\n1. Causal Direction: Recognize when one concept influences another (e.g., \"this leads to,\" \"this causes,\" \"results in,\" \"this influences\").\n2. Contextual Transitions: When the conversation shifts topics, infer the causal influence or dependency between these topics.\n3. Behavioral and Cognitive Feedback: Consider feedback loops and how certain topics may influence others based on previous discussions.\n\nVariable Naming Conventions:\n1. Use nouns or noun phrases for variable names that align with the user's research field terminology.\n2. Ensure variable names have a clear sense of direction (can be larger or smaller).\n3. Choose variables whose normal sense of direction is positive.\n4. Avoid using variable names containing prefixes indicating negation (non, un, etc.).\n5. Frame concepts using domain-specific language from the user's research background.\n\nEdge Strength Determination:\nDetermine edge strength based on the following scale:\n- Positive Influence → +1.0\n- Negative Influence → -1.0\n\nStep-by-step instructions for creating the CLD:\n1. Review the user's research background to understand their domain, terminology, and conceptual framework.\n2. Analyze the conversation_data and raw_text to identify key topics and concepts, focusing on formalism in the contextual progress.\n3. Create a list of variables (nodes) based on the identified topics, following the variable naming conventions and using terminology relevant to the user's research field.\n4. Determine causal relationships between variables using the causal relation detection guidelines.\n5. Explicitly identify or create at least one complete causal loop where a sequence of nodes connects back to the starting node.\n6. Verify each loop is functional by tracing the effect of increasing one node through the entire loop to confirm it eventually affects itself.\n7. Assign edge strengths based on the provided scale.\n8. Position nodes across a coordinate range (0-800 for x, 0-600 for y) to create a well-distributed visualization with adequate spacing.\n9. Arrange nodes that form loops in positions that clearly show the cyclical nature of their relationships.\n10. Create edges between related nodes, specifying the from and to node ids, and the strength of the relationship. Use appropriate arc values to make loop connections clear.\n11. Add one label to describe the causal loop diagram, positioning it at least 50 coordinate units away from any node to avoid overlap.\n12. Calculate the meta value by summing the total number of nodes, labels, and adding 2 for edges.\n\nFinal Output Formatting:\nConstruct the List with the following lists: \"nodes\", \"edges\", \"labels\", and \"meta\". Ensure that all required fields are included for each node, edge, and label. Double-check that the meta value is correctly calculated and that all node ids and edge references are valid.\n\nPresent your final output as a single list without any additional explanation or commentary."
+# def generate_individual_formalism(formalism_input: str, temp: float = 0.7, retries: int = 5, backoff_base: float = 1.5):
+#     generate_formalism_prompt ="You are an advanced AI model tasked with transforming structured conversational data and raw text into a concise causal loop diagram (CLD) represented as a dictionary with LOOPY-compatible structure. Your goal is to dynamically infer the relationships between topics discussed in the conversation and convert them into a causal loop diagram, with special focus on extracting formalism in the contextual progress of the conversation.\n\nYou will be provided with three inputs:\n1. conversation_data\n2. raw_text\n3. user_research_background - A description of the user's research interests and background\n\nAnalyze the conversation_data and raw_text to identify causal relationships and create a comprehensive causal loop diagram that aligns with the user's research background.\n\nOutput Format:\nYou must strictly return a dictionary in the following format:\n[\n  [\n    [id, x, y, init, label, color] # this is for nodes,\n    ...\n  ],\n  [\n    [from, to,arc,strength, _] # this is for the edges,\n    ...\n  ],\n  [\n    [x, y, text] # this is for the labels,\n    ...\n  ],\n  meta # this is the meta an integer\n]\n\ntypes of the about output format:\nnode = id - int, x - int, y -int, init - float(always 1), color- int.\nedges= from - int, to - int, arc - int, strength - float, _ = 0.\nlabels= x - int, y - int, text- str.\nmeta - int.\nWhere:\n- meta is the total number of nodes + labels + 2 (for edges).\n- Node id is a unique integer starting from 0.\n- Edges: Each edge refers to valid id values for from and to.\n- Assign random integers to color for different nodes but the integers assigned should be less than total number of nodes divided by 1.5.\n\nIMPORTANT: Only create nodes that have at least one causal relationship (edge) with another node. Do not include isolated nodes without any connecting edges.\n\nCRITICAL: Ensure that your diagram contains at least one complete causal loop where nodes are connected in a cycle (A→B→C→A or similar). The edges in these loops must form a complete circuit so that changes in any node propagate through the entire loop and affect the originating node. These must be genuine loops with actual causal connections, not just visually arranged in a circle.\n\nPRIMARY FOCUS: Prioritize identifying and extracting formalism in the contextual progress of the conversation. Examine how concepts, theories, methods, or structured approaches develop and influence each other throughout the conversation. Only include other nodes if they directly relate to this formalism development.\n\nRESEARCH CONTEXT ALIGNMENT: Frame all node labels, relationships, and concepts using terminology and perspectives relevant to the user's research background. The variables and causal connections should reflect the user's domain of expertise and research interests, making the diagram immediately relevant and intuitive to their field of study.\n\nLoop Detection and Construction:\nActively search for and construct complete causal loops in the conversation:\n- Reinforcing loops: Create cycles where changes amplify around the loop (e.g., A increases B, B increases C, C increases A).\n- Balancing loops: Create cycles that tend to stabilize (e.g., A increases B, B increases C, C decreases A).\n- Make sure every loop is complete with no breaks in the causal chain.\n- Test each loop by mentally tracing the effects: if one node increases, trace the effects through each connection to verify the loop completes and affects the original node.\n\nCausal Relation Detection:\nIdentify and infer causal relationships implicitly from the conversational context, summaries, and shifts between topics. Look for the following:\n1. Causal Direction: Recognize when one concept influences another (e.g., \"this leads to,\" \"this causes,\" \"results in,\" \"this influences\").\n2. Contextual Transitions: When the conversation shifts topics, infer the causal influence or dependency between these topics.\n3. Behavioral and Cognitive Feedback: Consider feedback loops and how certain topics may influence others based on previous discussions.\n\nVariable Naming Conventions:\n1. Use nouns or noun phrases for variable names that align with the user's research field terminology.\n2. Ensure variable names have a clear sense of direction (can be larger or smaller).\n3. Choose variables whose normal sense of direction is positive.\n4. Avoid using variable names containing prefixes indicating negation (non, un, etc.).\n5. Frame concepts using domain-specific language from the user's research background.\n\nEdge Strength Determination:\nDetermine edge strength based on the following scale:\n- Positive Influence → +1.0\n- Negative Influence → -1.0\n\nStep-by-step instructions for creating the CLD:\n1. Review the user's research background to understand their domain, terminology, and conceptual framework.\n2. Analyze the conversation_data and raw_text to identify key topics and concepts, focusing on formalism in the contextual progress.\n3. Create a list of variables (nodes) based on the identified topics, following the variable naming conventions and using terminology relevant to the user's research field.\n4. Determine causal relationships between variables using the causal relation detection guidelines.\n5. Explicitly identify or create at least one complete causal loop where a sequence of nodes connects back to the starting node.\n6. Verify each loop is functional by tracing the effect of increasing one node through the entire loop to confirm it eventually affects itself.\n7. Assign edge strengths based on the provided scale.\n8. Position nodes across a coordinate range (0-800 for x, 0-600 for y) to create a well-distributed visualization with adequate spacing.\n9. Arrange nodes that form loops in positions that clearly show the cyclical nature of their relationships.\n10. Create edges between related nodes, specifying the from and to node ids, and the strength of the relationship. Use appropriate arc values to make loop connections clear.\n11. Add one label to describe the causal loop diagram, positioning it at least 50 coordinate units away from any node to avoid overlap.\n12. Calculate the meta value by summing the total number of nodes, labels, and adding 2 for edges.\n\nFinal Output Formatting:\nConstruct the List with the following lists: \"nodes\", \"edges\", \"labels\", and \"meta\". Ensure that all required fields are included for each node, edge, and label. Double-check that the meta value is correctly calculated and that all node ids and edge references are valid.\n\nPresent your final output as a single list without any additional explanation or commentary."
+#     for attempt in range(retries):
+#         try:
+#             client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+#             message = client.messages.create(
+#                 model="claude-3-7-sonnet-20250219",
+#                 max_tokens=20000,
+#                 temperature=temp,
+#                 system= generate_formalism_prompt,
+#                 messages=[
+#                     {
+#                         "role": "user",
+#                         "content": [
+#                             {
+#                                 "type": "text",
+#                                 "text": formalism_input
+#                             }
+#                         ]
+#                     },
+#                     {
+#                         "role": "assistant",
+#                         "content": [
+#                             {
+#                                 "type": "text",
+#                                 "text": "{"
+#                             }
+#                         ]
+#                     },
+#                     {
+#                         "role": "user",
+#                         "content": [
+#                             {
+#                                 "type": "text",
+#                                 "text": (
+#                                     "You need to convert whatever you compute above to loopy url"
+
+#                                     "the url is"
+#                                     "https://ncase.me/loopy/v1.1"
+
+#                                     "here, the json made previously is a data parameter for this url, so we should urlencode this into data=<urlencoded json structure>"
+#                                     "you do not need to convert the parentheses and the commas look at the example below."
+#                                     "example link: https://ncase.me/loopy/v1.1/?data=[[[1,549,438,0.66,%22rabbits%22,0],[2,985,439,0.66,%22foxes%22,1]],[[2,1,153,-1,0],[1,2,160,1,0]],[[764,451,%22A%2520basic%2520ecological%250Afeedback%2520loop.%250A%250ATry%2520adding%2520extra%250Acreatures%2520to%2520this%250Aecosystem!%22],[764,244,%22more%2520rabbits%2520means%2520MORE%2520foxes%253A%250Ait%27s%2520a%2520positive%2520(%252B)%2520relationship%22],[773,648,%22more%2520foxes%2520means%2520FEWER%2520rabbits%253A%250Ait%27s%2520a%2520negative%2520(%25E2%2580%2593)%2520relationship%22],[1076,590,%22*%2520P.S%253A%2520this%2520is%2520NOT%2520the%2520%250ALotka-Volterra%2520model.%250AIt%27s%2520just%2520an%2520oscillator.%250Aclose%2520enough!%22]],2%5D"
+#                                     # "Now, based on the intermediate representation provided below, "
+#                                     # "convert it into a Loopy URL. The data should be in the following format:\n"
+#                                     # "1. Each node should be represented by its coordinates (x, y), initial value (init), label, and color.\n"
+#                                     # "2. Each edge should represent the relationship between nodes with the strength of the connection.\n"
+#                                     # "3. If the relationship is negative (inhibitory), encode the edge with a negative strength. \n"
+#                                     # "4. Format the output as a valid Loopy URL, like:\n"
+#                                     # "https://ncase.me/loopy/v1.1/?data=[[[1,549,438,0.66,%22rabbits%22,0],[2,985,439,0.66,%22foxes%22,1]],[[2,1,153,-1,0],[1,2,160,1,0]],[[764,451,%22A%2520basic%2520ecological%250Afeedback%2520loop.%250A%250ATry%2520adding%2520extra%250Acreatures%2520to%2520this%250Aecosystem!%22],[764,244,%22more%2520rabbits%2520means%2520MORE%2520foxes%253A%250Ait%27s%2520a%2520positive%2520(%252B)%2520relationship%22],[773,648,%22more%2520foxes%2520means%2520FEWER%2520rabbits%253A%250Ait%27s%2520a%2520negative%2520(%25E2%2580%2593)%2520relationship%22],[1076,590,%22*%2520P.S%253A%2520this%2520is%2520NOT%2520the%2520%250ALotka-Volterra%2520model.%250AIt%27s%2520just%2520an%2520oscillator.%250Aclose%2520enough!%22]],2%5D"
+#                                     # "Your task is to create a Loopy URL with the data provided, and return the final URL directly, with no additional text."
+#                                 )
+#                             }
+#                         ]
+#                     },
+#                     {
+#                         "role": "assistant",
+#                         "content": [
+#                             {
+#                                 "type": "text",
+#                                 "text": "https://ncase.me/loopy/v1.1/?data="
+#                             }
+#                         ]
+#                     }
+#                 ]
+#             )
+#             loopy_url = "https://ncase.me/loopy/v1.1/?data="+message.content[0].text
+#             return loopy_url
+#             # json_text = "{" + message.content[0].text
+            
+#             # return json.loads(json_text)  # Parse JSON response
+            
+
+#         except json.JSONDecodeError as e:
+#             print(f"[INFO]: Invalid JSON: {e}")
+#             return None
+
+#         except anthropic.AuthenticationError:
+#             print("[INFO]: Authentication failed. Check your API key.")
+#             return None
+
+#         except anthropic.RateLimitError:
+#             print("[INFO]: Rate limit exceeded. Retrying...")  # Retryable
+
+#         except anthropic.APIError as e:
+#             print(f"[INFO]: API error occurred: {e}")
+#             if "overloaded" not in str(e).lower():
+#                 return None
+
+#         except Exception as e:
+#             print(f"[INFO]: Unexpected error: {e}")
+#             return None
+
+#         # Exponential backoff before next retry
+#         sleep_time = backoff_base ** attempt + random.uniform(0, 1)
+#         time.sleep(sleep_time)
+
+#     return None
+
+def call_openrouter_langchain(
+    messages: list,
+    model: str = "anthropic/claude-3-7-sonnet-20250219",
+    temp: float = 0.7,
+    retries: int = 5,
+    backoff_base: float = 1.5,
+    max_tokens: int = 20000,
+):
+    """
+    General function to call OpenRouter using LangChain.
+
+    Args:
+        messages: The messages for the LLM.
+        model: Model name for OpenRouter.
+        temp: Temperature for the model.
+        retries: Number of retry attempts.
+        backoff_base: Base for exponential backoff.
+        max_tokens: Maximum tokens for the response.
+
+    Returns:
+        The content of the LLM response, or None if failed.
+    """
+    openrouter_key = os.getenv("OPENROUTER_API_KEY")
+    if not openrouter_key:
+        print("[INFO]: OPENROUTER_API_KEY not found")
+        return None
+
     for attempt in range(retries):
         try:
-            client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-            message = client.messages.create(
-                model="claude-3-7-sonnet-20250219",
-                max_tokens=20000,
+            llm = ChatOpenAI(
+                model=model,
+                openai_api_key=openrouter_key,
+                openai_api_base="https://openrouter.ai/api/v1",
                 temperature=temp,
-                system= generate_formalism_prompt,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": formalism_input
-                            }
-                        ]
-                    },
-                    {
-                        "role": "assistant",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": "{"
-                            }
-                        ]
-                    },
-                    {
-                        "role": "user",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": (
-                                    "You need to convert whatever you compute above to loopy url"
-
-                                    "the url is"
-                                    "https://ncase.me/loopy/v1.1"
-
-                                    "here, the json made previously is a data parameter for this url, so we should urlencode this into data=<urlencoded json structure>"
-                                    "you do not need to convert the parentheses and the commas look at the example below."
-                                    "example link: https://ncase.me/loopy/v1.1/?data=[[[1,549,438,0.66,%22rabbits%22,0],[2,985,439,0.66,%22foxes%22,1]],[[2,1,153,-1,0],[1,2,160,1,0]],[[764,451,%22A%2520basic%2520ecological%250Afeedback%2520loop.%250A%250ATry%2520adding%2520extra%250Acreatures%2520to%2520this%250Aecosystem!%22],[764,244,%22more%2520rabbits%2520means%2520MORE%2520foxes%253A%250Ait%27s%2520a%2520positive%2520(%252B)%2520relationship%22],[773,648,%22more%2520foxes%2520means%2520FEWER%2520rabbits%253A%250Ait%27s%2520a%2520negative%2520(%25E2%2580%2593)%2520relationship%22],[1076,590,%22*%2520P.S%253A%2520this%2520is%2520NOT%2520the%2520%250ALotka-Volterra%2520model.%250AIt%27s%2520just%2520an%2520oscillator.%250Aclose%2520enough!%22]],2%5D"
-                                    # "Now, based on the intermediate representation provided below, "
-                                    # "convert it into a Loopy URL. The data should be in the following format:\n"
-                                    # "1. Each node should be represented by its coordinates (x, y), initial value (init), label, and color.\n"
-                                    # "2. Each edge should represent the relationship between nodes with the strength of the connection.\n"
-                                    # "3. If the relationship is negative (inhibitory), encode the edge with a negative strength. \n"
-                                    # "4. Format the output as a valid Loopy URL, like:\n"
-                                    # "https://ncase.me/loopy/v1.1/?data=[[[1,549,438,0.66,%22rabbits%22,0],[2,985,439,0.66,%22foxes%22,1]],[[2,1,153,-1,0],[1,2,160,1,0]],[[764,451,%22A%2520basic%2520ecological%250Afeedback%2520loop.%250A%250ATry%2520adding%2520extra%250Acreatures%2520to%2520this%250Aecosystem!%22],[764,244,%22more%2520rabbits%2520means%2520MORE%2520foxes%253A%250Ait%27s%2520a%2520positive%2520(%252B)%2520relationship%22],[773,648,%22more%2520foxes%2520means%2520FEWER%2520rabbits%253A%250Ait%27s%2520a%2520negative%2520(%25E2%2580%2593)%2520relationship%22],[1076,590,%22*%2520P.S%253A%2520this%2520is%2520NOT%2520the%2520%250ALotka-Volterra%2520model.%250AIt%27s%2520just%2520an%2520oscillator.%250Aclose%2520enough!%22]],2%5D"
-                                    # "Your task is to create a Loopy URL with the data provided, and return the final URL directly, with no additional text."
-                                )
-                            }
-                        ]
-                    },
-                    {
-                        "role": "assistant",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": "https://ncase.me/loopy/v1.1/?data="
-                            }
-                        ]
-                    }
-                ]
+                max_tokens=max_tokens
             )
-            loopy_url = "https://ncase.me/loopy/v1.1/?data="+message.content[0].text
-            return loopy_url
-            # json_text = "{" + message.content[0].text
-            
-            # return json.loads(json_text)  # Parse JSON response
-            
 
-        except json.JSONDecodeError as e:
-            print(f"[INFO]: Invalid JSON: {e}")
-            return None
-
-        except anthropic.AuthenticationError:
-            print("[INFO]: Authentication failed. Check your API key.")
-            return None
-
-        except anthropic.RateLimitError:
-            print("[INFO]: Rate limit exceeded. Retrying...")  # Retryable
-
-        except anthropic.APIError as e:
-            print(f"[INFO]: API error occurred: {e}")
-            if "overloaded" not in str(e).lower():
-                return None
+            response = llm.invoke(messages)
+            return response.content
 
         except Exception as e:
-            print(f"[INFO]: Unexpected error: {e}")
-            return None
+            print(f"[INFO]: Error on attempt {attempt + 1}: {str(e)}")
+            if "authentication" in str(e).lower() or "api key" in str(e).lower():
+                print("[INFO]: Authentication failed. Check your API key.")
+                return None
+            if "rate limit" in str(e).lower():
+                print("[INFO]: Rate limit exceeded. Retrying...")
+            elif "overloaded" not in str(e).lower() and attempt == retries - 1:
+                print(f"[INFO]: Final attempt failed: {e}")
+                return None
 
-        # Exponential backoff before next retry
-        sleep_time = backoff_base ** attempt + random.uniform(0, 1)
-        time.sleep(sleep_time)
+        if attempt < retries - 1:
+            sleep_time = backoff_base ** attempt + random.uniform(0, 1)
+            print(f"[INFO]: Waiting {sleep_time:.2f} seconds before retry...")
+            time.sleep(sleep_time)
 
     return None
+
+def convert_to_loopy_url(data_dict, base_url="https://ncase.me/loopy/v1.1/"):
+    """
+    Convert a data structure to a LOOPY-compatible URL.
+    
+    Args:
+        data_dict: Dictionary or string containing the LOOPY data structure
+        base_url: Base URL for LOOPY (default: v1.1)
+    
+    Returns:
+        Complete LOOPY URL with encoded data
+    """
+    
+    if isinstance(data_dict, str):
+        cleaned = data_dict.strip()
+        data_structure = json.loads(cleaned)
+    else:
+        data_structure = data_dict
+    
+    json_string = json.dumps(data_structure, separators=(',', ':'))
+    
+    encoded_data = urllib.parse.quote(json_string)
+    
+    loopy_url = f"{base_url}?data={encoded_data}"
+    
+    return loopy_url
+
+
+def causal_loop_formalism_generator(
+    user_input: str,
+    temp: float = 0.7,
+    max_tokens: int = 20000,
+):
+    """
+    Sends a prompt and user input to OpenRouter via LangChain.
+
+    Args:
+        prompt: The system prompt for the LLM.
+        user_input: The user input or query.
+        model: Model name for OpenRouter.
+        temp: Temperature for the model.
+        api_key: OpenRouter API key (optional, uses env var if not provided).
+        max_tokens: Maximum tokens for the response.
+        prepend_ai_message: If True, prepends an empty AIMessage to the conversation.
+
+    Returns:
+        The content of the LLM response, or None if failed.
+    """
+    
+    system_prompt = "You are an advanced AI model tasked with transforming structured conversational data and raw text into a concise causal loop diagram (CLD) represented as a dictionary with LOOPY-compatible structure. Your goal is to dynamically infer the relationships between topics discussed in the conversation and convert them into a causal loop diagram, with special focus on extracting formalism in the contextual progress of the conversation.\n\nYou will be provided with three inputs:\n1. conversation_data\n2. raw_text\n3. user_research_background - A description of the user's research interests and background\n\nAnalyze the conversation_data and raw_text to identify causal relationships and create a comprehensive causal loop diagram that aligns with the user's research background.\n\nOutput Format:\nYou must strictly return a dictionary in the following format:\n[\n  [\n    [id, x, y, init, label, color] # this is for nodes,\n    ...\n  ],\n  [\n    [from, to,arc,strength, _] # this is for the edges,\n    ...\n  ],\n  [\n    [x, y, text] # this is for the labels,\n    ...\n  ],\n  meta # this is the meta an integer\n]\n\ntypes of the about output format:\nnode = id - int, x - int, y -int, init - float(always 1), color- int.\nedges= from - int, to - int, arc - int, strength - float, _ = 0.\nlabels= x - int, y - int, text- str.\nmeta - int.\nWhere:\n- meta is the total number of nodes + labels + 2 (for edges).\n- Node id is a unique integer starting from 0.\n- Edges: Each edge refers to valid id values for from and to.\n- Assign random integers to color for different nodes but the integers assigned should be less than total number of nodes divided by 1.5.\n\nIMPORTANT: Only create nodes that have at least one causal relationship (edge) with another node. Do not include isolated nodes without any connecting edges.\n\nCRITICAL: Ensure that your diagram contains at least one complete causal loop where nodes are connected in a cycle (A→B→C→A or similar). The edges in these loops must form a complete circuit so that changes in any node propagate through the entire loop and affect the originating node. These must be genuine loops with actual causal connections, not just visually arranged in a circle.\n\nPRIMARY FOCUS: Prioritize identifying and extracting formalism in the contextual progress of the conversation. Examine how concepts, theories, methods, or structured approaches develop and influence each other throughout the conversation. Only include other nodes if they directly relate to this formalism development.\n\nRESEARCH CONTEXT ALIGNMENT: Frame all node labels, relationships, and concepts using terminology and perspectives relevant to the user's research background. The variables and causal connections should reflect the user's domain of expertise and research interests, making the diagram immediately relevant and intuitive to their field of study.\n\nLoop Detection and Construction:\nActively search for and construct complete causal loops in the conversation:\n- Reinforcing loops: Create cycles where changes amplify around the loop (e.g., A increases B, B increases C, C increases A).\n- Balancing loops: Create cycles that tend to stabilize (e.g., A increases B, B increases C, C decreases A).\n- Make sure every loop is complete with no breaks in the causal chain.\n- Test each loop by mentally tracing the effects: if one node increases, trace the effects through each connection to verify the loop completes and affects the original node.\n\nCausal Relation Detection:\nIdentify and infer causal relationships implicitly from the conversational context, summaries, and shifts between topics. Look for the following:\n1. Causal Direction: Recognize when one concept influences another (e.g., \"this leads to,\" \"this causes,\" \"results in,\" \"this influences\").\n2. Contextual Transitions: When the conversation shifts topics, infer the causal influence or dependency between these topics.\n3. Behavioral and Cognitive Feedback: Consider feedback loops and how certain topics may influence others based on previous discussions.\n\nVariable Naming Conventions:\n1. Use nouns or noun phrases for variable names that align with the user's research field terminology.\n2. Ensure variable names have a clear sense of direction (can be larger or smaller).\n3. Choose variables whose normal sense of direction is positive.\n4. Avoid using variable names containing prefixes indicating negation (non, un, etc.).\n5. Frame concepts using domain-specific language from the user's research background.\n\nEdge Strength Determination:\nDetermine edge strength based on the following scale:\n- Positive Influence → +1.0\n- Negative Influence → -1.0\n\nStep-by-step instructions for creating the CLD:\n1. Review the user's research background to understand their domain, terminology, and conceptual framework.\n2. Analyze the conversation_data and raw_text to identify key topics and concepts, focusing on formalism in the contextual progress.\n3. Create a list of variables (nodes) based on the identified topics, following the variable naming conventions and using terminology relevant to the user's research field.\n4. Determine causal relationships between variables using the causal relation detection guidelines.\n5. Explicitly identify or create at least one complete causal loop where a sequence of nodes connects back to the starting node.\n6. Verify each loop is functional by tracing the effect of increasing one node through the entire loop to confirm it eventually affects itself.\n7. Assign edge strengths based on the provided scale.\n8. Position nodes across a coordinate range (0-800 for x, 0-600 for y) to create a well-distributed visualization with adequate spacing.\n9. Arrange nodes that form loops in positions that clearly show the cyclical nature of their relationships.\n10. Create edges between related nodes, specifying the from and to node ids, and the strength of the relationship. Use appropriate arc values to make loop connections clear.\n11. Add one label to describe the causal loop diagram, positioning it at least 50 coordinate units away from any node to avoid overlap.\n12. Calculate the meta value by summing the total number of nodes, labels, and adding 2 for edges.\n\nFinal Output Formatting:\nConstruct the List with the following lists: \"nodes\", \"edges\", \"labels\", and \"meta\". Ensure that all required fields are included for each node, edge, and label. Double-check that the meta value is correctly calculated and that all node ids and edge references are valid.\n\nPresent your final output as a single list without any additional explanation or commentary."
+    model = "anthropic/claude-3-7-sonnet-20250219"
+    messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_input),
+                AIMessage(content="[")
+            ]
+    
+    result = "[" + call_openrouter_langchain(
+        messages=messages,
+        model=model,
+        temp=temp,
+        max_tokens=max_tokens,
+    )
+    
+    loopy_url = convert_to_loopy_url(result)
+    
+    return loopy_url
+
+def deepseek_prover_formalism_generator(
+    user_input: str,
+    temp: float = 0.7,
+    max_tokens: int = 20000,
+):
+    """
+    Sends a prompt and user input to OpenRouter via LangChain.
+
+    Args:
+        prompt: The system prompt for the LLM.
+        user_input: The user input or query.
+        model: Model name for OpenRouter.
+        temp: Temperature for the model.
+        api_key: OpenRouter API key (optional, uses env var if not provided).
+        max_tokens: Maximum tokens for the response.
+        prepend_ai_message: If True, prepends an empty AIMessage to the conversation.
+
+    Returns:
+        The content of the LLM response, or None if failed.
+    """
+    
+    system_prompt = """You are an advanced AI model specialized in formal mathematical reasoning and proof generation. Your task is to analyze conversational data and raw text as a complete unit to derive and prove mathematical statements that capture the essential relationships, patterns, or theoretical insights emerging from the overall discussion, framed within the user's research domain.
+You will be provided with three inputs:
+conversation_data - Structured conversational representations.
+raw_text - transcripts for analysis
+user_research_background - A brief description of the user's research area (e.g., "mechanistic interpretability", "physics neural networks")
+Your primary objective is to synthesize the complete conversational content to identify overarching mathematical structures, logical relationships, or theoretical frameworks, then generate formal proofs(max 3) that capture these insights using terminology and conceptual frameworks from the user's specified research domain.
+Mathematical Formatting Requirements:
+CRITICAL: All mathematical expressions must use standard LaTeX delimiters:
+Inline math: Use $expression$ (single dollar signs) for all mathematical symbols, variables, functions, and expressions within text
+Display math: Use $$equation$$ (double dollar signs) for all standalone equations, theorems statements, and multi-line mathematical expressions
+Examples:
+Correct: $\mathcal{N}_n$, $\epsilon > 0$, $f: \mathbb{R}^d \rightarrow \mathbb{R}$
+Correct: $$\sup_{x \in \mathcal{X}} | \mathcal{N}_n(x; \theta_n) - f(x) | < \epsilon$$
+Incorrect: ( \mathcal{N}_n ), [ equation ]
+Analysis Framework:
+Holistic Content Analysis: Consider the entire conversation snippet as a unified source of information to extract mathematical insights
+Domain-Specific Formalization: Frame all mathematical concepts, variables, and logical structures using notation and theoretical frameworks from the user's research field
+Synthetic Proof Generation: Develop theorems that represent the key mathematical or logical insights that emerge when considering the full conversational context
+Research Alignment: Ensure all formal proofs utilize concepts, terminology, and mathematical approaches specific to the user's research area
+Output Requirements:
+Generate formal mathematical proofs(max 3) using appropriate notation for the user's research domain
+Include clear theorem statements with proper mathematical formatting
+Provide step-by-step logical reasoning for each proof
+Use domain-specific mathematical language and notation systems
+Ensure all proofs are mathematically rigorous and verifiable
+Derive theorems that capture the essential mathematical insights from the complete conversational context
+Proof Structure: For each theorem, provide:
+Theorem Statement: Clearly stated using domain-appropriate mathematical notation
+Proof: Step-by-step logical derivation with justification for each step
+Contextual Relevance: Brief explanation of how this theorem synthesizes insights from the overall conversation within the research domain
+Present your output as a series of formal mathematical proofs without additional commentary, ensuring each proof captures mathematical insights that emerge from considering the complete conversational snippet within the specified research background.
+Based on your messages, your communication style is direct and technically precise. You provide structured specifications with clear requirements, use formatting to organize information, and make targeted corrections when clarifying requirements. You prefer concise, focused instructions without unnecessary complexity, and expect outputs that directly address the core technical objectives. You emphasize the importance of considering complete contexts rather than isolated elements.
+"""   
+    model = "deepseek/deepseek-prover-v2"
+    messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_input),
+                AIMessage(content="")
+            ]
+    
+    result = call_openrouter_langchain(
+        messages=messages,
+        model=model,
+        temp=temp,
+        max_tokens=max_tokens,
+    )
+    
+    return result
 
 
 def generate_fact_check_json_perplexity(claims: List[str], temp: float = 0.6, retries: int = 3, backoff_base: float = 1.5):
@@ -1492,30 +1731,38 @@ def generate_formalism(chunks: dict, graph_data: dict, user_pref: str) -> List:
             chunk_id = node['chunk_id']
             raw_text = chunks[chunk_id]
             
-            formalism_input = f"conversation_data: \n contextual node : \n {contextual_node} \n related nodes : \n {related_nodes} \n user_research_background \n {user_pref} \n raw_text : \n {raw_text}"
-            loopy_url = generate_individual_formalism(formalism_input=formalism_input)
+            formalism_input = f"conversation_data: \n contextual node : \n {contextual_node} \n related nodes : \n {related_nodes} \n user_research_background : \n generate formalisms {user_pref} \n raw_text : \n {raw_text}"
+            # loopy_url = generate_individual_formalism(formalism_input=formalism_input)
+            loopy_url = causal_loop_formalism_generator(user_input=formalism_input)
+            formal_proof = deepseek_prover_formalism_generator(user_input=formalism_input)
             if loopy_url:
                 # iframe_loopy_url = convert_to_embedded(loopy_url)
                 formalism_list.append({
                     'formalism_node' : node['node_name'],
-                    'formalism_graph_url' : loopy_url
+                    'formalism_graph_url' : loopy_url,
+                    'formal_proof' : formal_proof
                 })
     return formalism_list
 
 # all conversations
 @lct_app.get("/conversations/", response_model=List[SaveJsonResponseExtended])
-async def list_saved_conversations():
+async def list_saved_conversations(current_user: dict = Depends(verify_firebase_token)):
     try:
-        rows = await get_all_conversations()
+        # Get conversations accessible to the user (owned + shared)
+        rows = get_all_accessible_conversations_test(user_uid=current_user['uid'])
         conversations = []
 
         for row in rows:
+            access_type = row.get("access_type", "owner")
+            message = "Owned conversation" if access_type == "owner" else "Shared with you"
+            
             conversations.append({
                 "file_id": str(row["id"]),
                 "file_name": row["file_name"],
-                "message": "Loaded from database",
+                "message": message,
                 "no_of_nodes": row["no_of_nodes"],
-                "created_at": row["created_at"].isoformat() if isinstance(row["created_at"], datetime) else row["created_at"]
+                "created_at": row["created_at"].isoformat() if isinstance(row["created_at"], datetime) else row["created_at"],
+                "access_type": access_type
             })
 
         print(f"[INFO] Loaded {len(conversations)} conversations from DB")
@@ -1523,6 +1770,60 @@ async def list_saved_conversations():
 
     except Exception as e:
         print(f"[FATAL] Error fetching from DB: {e}")
+        raise HTTPException(status_code=500, detail=f"Database access error: {str(e)}")
+
+# owned conversations only
+@lct_app.get("/conversations/owned/", response_model=List[SaveJsonResponseExtended])
+async def list_owned_conversations(current_user: dict = Depends(verify_firebase_token)):
+    try:
+        rows = get_owned_conversations_test(user_uid=current_user['uid'])
+        conversations = []
+
+        for row in rows:
+            conversations.append({
+                "file_id": str(row["id"]),
+                "file_name": row["file_name"],
+                "message": "Owned conversation",
+                "no_of_nodes": row["no_of_nodes"],
+                "created_at": row["created_at"].isoformat() if isinstance(row["created_at"], datetime) else row["created_at"],
+                "access_type": "owner"
+            })
+
+        # Sort by created_at (newest first)
+        conversations.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        
+        print(f"[INFO] Loaded {len(conversations)} owned conversations from DB")
+        return conversations
+
+    except Exception as e:
+        print(f"[FATAL] Error fetching owned conversations from DB: {e}")
+        raise HTTPException(status_code=500, detail=f"Database access error: {str(e)}")
+
+# shared conversations only
+@lct_app.get("/conversations/shared/", response_model=List[SaveJsonResponseExtended])
+async def list_shared_conversations(current_user: dict = Depends(verify_firebase_token)):
+    try:
+        rows = get_shared_conversations_test(user_uid=current_user['uid'])
+        conversations = []
+
+        for row in rows:
+            conversations.append({
+                "file_id": str(row["id"]),
+                "file_name": row["file_name"],
+                "message": "Shared with you",
+                "no_of_nodes": row["no_of_nodes"],
+                "created_at": row["created_at"].isoformat() if isinstance(row["created_at"], datetime) else row["created_at"],
+                "access_type": "shared"
+            })
+
+        # Sort by created_at (newest first)
+        conversations.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        
+        print(f"[INFO] Loaded {len(conversations)} shared conversations from DB")
+        return conversations
+
+    except Exception as e:
+        print(f"[FATAL] Error fetching shared conversations from DB: {e}")
         raise HTTPException(status_code=500, detail=f"Database access error: {str(e)}")
 # def list_saved_conversations():
 #     try:
@@ -1579,11 +1880,12 @@ async def list_saved_conversations():
   
 # get individual conversations 
 @lct_app.get("/conversations/{conversation_id}", response_model=ConversationResponse)
-async def get_conversation(conversation_id: str):
+async def get_conversation(conversation_id: str, current_user: dict = Depends(verify_firebase_token)):
     try:
-        gcs_path = await get_conversation_gcs_path(conversation_id)
+        # gcs_path = await get_conversation_gcs_path(conversation_id)
+        gcs_path = get_conversation_gcs_path_test(conversation_id, owner_uid=current_user['uid'])
         if not gcs_path:
-            raise HTTPException(status_code=404, detail="Conversation metadata not found in DB.")
+            raise HTTPException(status_code=404, detail="Conversation not found or access denied.")
 
         return load_conversation_from_gcs(gcs_path)
 
@@ -1623,11 +1925,135 @@ async def get_conversation(conversation_id: str):
 #     except Exception as e:
 #         print(f"[FATAL] Error fetching {conversation_id} from GCS: {e}")
 #         raise HTTPException(status_code=500, detail=f"GCS error: {str(e)}")
+
+# Endpoint to share a conversation with other users
+@lct_app.post("/conversations/{conversation_id}/share", response_model=ShareConversationResponse)
+async def share_conversation(
+    conversation_id: str, 
+    request: ShareConversationRequest,
+    current_user: dict = Depends(verify_firebase_token)
+):
+    try:
+        # Validate that the conversation_id in URL matches the one in request body
+        if conversation_id != request.conversation_id:
+            raise HTTPException(status_code=400, detail="Conversation ID mismatch")
+        
+        shared_uids = []
+        failed_emails = []
+        
+        # Get UIDs for each email
+        for email in request.emails:
+            try:
+                user_info = get_user_by_email(email)
+                if user_info['email_verified']:
+                    shared_uids.append(user_info['uid'])
+                else:
+                    failed_emails.append(email)
+                    print(f"[WARNING] User {email} email not verified")
+            except HTTPException as e:
+                if e.status_code == 404:
+                    failed_emails.append(email)
+                    print(f"[WARNING] User not found: {email}")
+                else:
+                    raise e
+        
+        # Share the conversation if we have valid UIDs
+        if shared_uids:
+            success = share_conversation_test(
+                conversation_id=conversation_id,
+                owner_uid=current_user['uid'],
+                shared_uids=shared_uids
+            )
+            
+            if not success:
+                raise HTTPException(
+                    status_code=403, 
+                    detail="Conversation not found or you don't have permission to share it"
+                )
+        
+        return ShareConversationResponse(
+            success=len(shared_uids) > 0,
+            message=f"Conversation shared with {len(shared_uids)} users. {len(failed_emails)} emails failed.",
+            shared_with=shared_uids,
+            failed_emails=failed_emails
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Error sharing conversation: {e}")
+        raise HTTPException(status_code=500, detail="Failed to share conversation")
+
+
+# Endpoint to get users that a conversation is shared with
+@lct_app.get("/conversations/{conversation_id}/shared-users", response_model=GetSharedUsersResponse)
+async def get_shared_users(
+    conversation_id: str,
+    current_user: dict = Depends(verify_firebase_token)
+):
+    try:
+        # Get the list of UIDs the conversation is shared with
+        shared_uids = get_conversation_shared_users_test(conversation_id, current_user['uid'])
+        
+        if not shared_uids:
+            return GetSharedUsersResponse(shared_users=[])
+        
+        # Get user details for each UID
+        users_data = get_users_by_uids(shared_uids)
+        
+        shared_users = [
+            SharedUser(
+                uid=user['uid'],
+                email=user['email'],
+                display_name=user['display_name']
+            )
+            for user in users_data
+        ]
+        
+        return GetSharedUsersResponse(shared_users=shared_users)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Error getting shared users: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get shared users")
+
+
+# Endpoint to remove a user from conversation sharing
+@lct_app.delete("/conversations/{conversation_id}/shared-users", response_model=RemoveUserResponse)
+async def remove_shared_user(
+    conversation_id: str,
+    request: RemoveUserRequest,
+    current_user: dict = Depends(verify_firebase_token)
+):
+    try:
+        success = remove_user_from_conversation_test(
+            conversation_id=conversation_id,
+            owner_uid=current_user['uid'],
+            user_uid_to_remove=request.user_uid
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=403,
+                detail="Conversation not found, you don't have permission, or user was not shared with"
+            )
+        
+        return RemoveUserResponse(
+            success=True,
+            message="User removed from conversation sharing"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Error removing shared user: {e}")
+        raise HTTPException(status_code=500, detail="Failed to remove user from sharing")
     
     
 # Endpoint to get transcript chunks
 @lct_app.post("/get_chunks/", response_model=ChunkedTranscript)
-async def get_chunks(request: TranscriptRequest):
+async def get_chunks(request: TranscriptRequest, current_user: dict = Depends(verify_firebase_token)):
     try:
         transcript = request.transcript
 
@@ -1646,7 +2072,7 @@ async def get_chunks(request: TranscriptRequest):
 
 # Streaming Endpoint for JSON generation
 @lct_app.post("/generate-context-stream/")
-async def generate_context_stream(request: ChunkedRequest):
+async def generate_context_stream(request: ChunkedRequest, current_user: dict = Depends(verify_firebase_token)):
     try:
         chunks = request.chunks
 
@@ -1659,7 +2085,7 @@ async def generate_context_stream(request: ChunkedRequest):
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
     
 @lct_app.post("/save_json/", response_model=SaveJsonResponse)
-async def save_json_call(request: SaveJsonRequest):
+async def save_json_call(request: SaveJsonRequest, current_user: dict = Depends(verify_firebase_token)):
     """
     FastAPI route to save JSON data and insert metadata into the DB.
     """
@@ -1681,7 +2107,7 @@ async def save_json_call(request: SaveJsonRequest):
         except Exception as file_error:
             raise HTTPException(status_code=500, detail=f"File saving error: {str(file_error)}")
 
-        # Insert metadata into DB
+        # Insert metadata into DB with owner_uid
         number_of_nodes = len(request.graph_data[0]) if request.graph_data and isinstance(request.graph_data[0], list) else 0
         print("graph data check: ", request.graph_data)
         print("number of nodes: ", len(request.graph_data[0]) if request.graph_data and isinstance(request.graph_data[0], list) else 0)
@@ -1690,11 +2116,14 @@ async def save_json_call(request: SaveJsonRequest):
             "file_name": result["file_name"],
             "no_of_nodes": number_of_nodes,
             "gcs_path": result["gcs_path"],
-            "created_at": datetime.utcnow()
+            "created_at": datetime.utcnow(),
+            "owner_uid": current_user['uid']  # Add owner_uid from authenticated user
         }
 
-        await insert_conversation_metadata(metadata)
+        # await insert_conversation_metadata(metadata)
+        insert_conversation_metadata_test(metadata)
 
+        print(f"[INFO] Conversation saved for user {current_user['uid']}: {result['file_id']}")
         return result
 
     except HTTPException as http_err:
@@ -1729,7 +2158,7 @@ async def save_json_call(request: SaveJsonRequest):
 #         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
     
 @lct_app.post("/generate_formalism/", response_model=generateFormalismResponse)
-async def generate_formalism_call(request: generateFormalismRequest):
+async def generate_formalism_call(request: generateFormalismRequest, current_user: dict = Depends(verify_firebase_token)):
     try:
         # Validate input data
         if not isinstance(request.chunks, dict) or not isinstance(request.graph_data, List):
@@ -1992,27 +2421,6 @@ async def websocket_audio_endpoint(client_websocket: WebSocket):
     except Exception as e:
         print(f"[CLIENT WS] Unexpected error in WebSocket handler: {e}")
         
-# Serve index.html at root
-# @lct_app.get("/")
-# def read_root():
-#     return FileResponse("frontend_dist/index.html")
-
-# # Serve favicon or other top-level static files
-# @lct_app.get("/favicon.ico")
-# def favicon():
-#     file_path = "frontend_dist/favicon.ico"
-#     if os.path.exists(file_path):
-#         return FileResponse(file_path)
-#     return {}
-
-# # Catch-all for SPA routes (NOT static files)
-# @lct_app.get("/{full_path:path}")
-# async def spa_router(full_path: str):
-#     file_path = f"frontend_dist/{full_path}"
-#     if os.path.exists(file_path):
-#         return FileResponse(file_path)
-#     return FileResponse("frontend_dist/index.html")
-
 @lct_app.post("/fact_check_claims/", response_model=ClaimsResponse)
 async def fact_check_claims_call(request: FactCheckRequest):
     try:
@@ -2029,6 +2437,28 @@ async def fact_check_claims_call(request: FactCheckRequest):
         raise http_err
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+# Serve index.html at root
+@lct_app.get("/")
+def read_root():
+    return FileResponse("frontend_dist/index.html")
+
+# Serve favicon or other top-level static files
+@lct_app.get("/favicon.ico")
+def favicon():
+    file_path = "frontend_dist/favicon.ico"
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    return {}
+
+# Catch-all for SPA routes (NOT static files)
+@lct_app.get("/{full_path:path}")
+async def spa_router(full_path: str):
+    file_path = f"frontend_dist/{full_path}"
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+    return FileResponse("frontend_dist/index.html")
+
 
 # @lct_app.post("/save_fact_check/")
 # async def save_fact_check_call(request: SaveFactCheckRequest):

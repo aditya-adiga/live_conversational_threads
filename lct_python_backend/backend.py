@@ -1010,7 +1010,7 @@ def genai_accumulate_text_json(
     retries: int = 3,
     backoff_base: float = 1.5
 ):
-    model_name = "gemini-2.5-flash-preview-05-20"
+    model_name = "gemini-2.5-flash"
 
     system_prompt = """You are an expert conversation analyst and advanced AI reasoning assistant. I will provide you with a block of accumulated transcript text. Your task is to determine whether this text contains at least one complete and self-contained conversational thread, and if so, return all complete threads while leaving any incomplete ones for future accumulation.
 Definition:

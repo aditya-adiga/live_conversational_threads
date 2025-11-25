@@ -31,10 +31,10 @@ def initialize_firebase_admin():
     
     try:
         cred = get_firebase_credentials()
-        if cred:
-            app = firebase_admin.initialize_app(cred)
-        else:
-            app = firebase_admin.initialize_app()
+        # if cred:
+        app = firebase_admin.initialize_app(cred, {'projectId': 'lct-auth-db7ff'})
+        # else:
+        #     app = firebase_admin.initialize_app()
         
         print("Firebase Admin SDK initialized successfully")
         return app
@@ -44,7 +44,6 @@ def initialize_firebase_admin():
 
 # Security scheme for Bearer token
 security = HTTPBearer()
-
 async def verify_firebase_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
     """
     Verify Firebase ID token and return user information

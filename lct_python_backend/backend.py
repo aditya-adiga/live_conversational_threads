@@ -2147,8 +2147,8 @@ async def save_json_call(request: SaveJsonRequest, current_user: dict = Depends(
 
         # Insert metadata into DB with owner_uid
         number_of_nodes = len(request.graph_data[0]) if request.graph_data and isinstance(request.graph_data[0], list) else 0
-        print("graph data check: ", request.graph_data)
-        print("number of nodes: ", len(request.graph_data[0]) if request.graph_data and isinstance(request.graph_data[0], list) else 0)
+        # print("graph data check: ", request.graph_data)
+        # print("number of nodes: ", len(request.graph_data[0]) if request.graph_data and isinstance(request.graph_data[0], list) else 0)
         metadata = {
             "id": result["file_id"],
             "file_name": result["file_name"],
@@ -2326,8 +2326,8 @@ async def websocket_audio_endpoint(client_websocket: WebSocket):
             segmented_input_chunk = ' '.join(text_batch)
             incomplete_seg= ''
         
-        print(f"[INFO]: segmented input: {segmented_input_chunk}")
-        print(f"[INFO]: detected threads: {accumulated_output['detected_threads']}")
+        # print(f"[INFO]: segmented input: {segmented_input_chunk}")
+        # print(f"[INFO]: detected threads: {accumulated_output['detected_threads']}")
         
         #sending graph stuff to front end
         if segmented_input_chunk.strip():

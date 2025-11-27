@@ -96,7 +96,7 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
       // LOCK
       isProcessingRef.current = true;
 
-      console.log(`[CLIENT] Processing batch of ${accumulatorRef.current.length} transcripts, stopFlag: ${stopAccumulatingFlag}`);
+      // console.log(`[CLIENT] Processing batch of ${accumulatorRef.current.length} transcripts, stopFlag: ${stopAccumulatingFlag}`);
       
       const currentGraphData = latestGraphData.current;
       const currentChunkDict = latestChunkDict.current;
@@ -116,7 +116,7 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
       }
 
       const result = await response.json();
-      console.log("[CLIENT] Backend response:", result);
+      // console.log("[CLIENT] Backend response:", result);
 
       // Update React state with new data
       if (result.new_nodes && result.new_nodes.length > 0) {
@@ -124,7 +124,7 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
         const currentNodes = (currentGraphData && currentGraphData.length > 0) ? currentGraphData[0] : [];
         const updatedGraph = [...currentNodes, ...newNodes];
         
-        console.log(`[CLIENT] Appending ${newNodes.length} new nodes. Total nodes: ${updatedGraph.length}`);
+        // console.log(`[CLIENT] Appending ${newNodes.length} new nodes. Total nodes: ${updatedGraph.length}`);
         onDataReceived?.([updatedGraph]);
       }
       
@@ -138,14 +138,14 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
         accumulatorRef.current = result.incomplete_segment ? [result.incomplete_segment] : [];
         batchSizeRef.current = BATCH_SIZE;
         continueAccumulatingRef.current = true;
-        console.log("[CLIENT] Batch processed - resetting accumulator");
+        // console.log("[CLIENT] Batch processed - resetting accumulator");
       } else if (result.decision === "continue_accumulating") {
         // Check if we've hit max batch size
         if (batchSizeRef.current >= MAX_BATCH_SIZE) {
-          console.log("[CLIENT] Max batch size reached, forcing segmentation");
+          // console.log("[CLIENT] Max batch size reached, forcing segmentation");
           // Increase batch size and keep accumulating
           batchSizeRef.current += BATCH_SIZE;
-          console.log(`[CLIENT] Continuing accumulation, new batch size: ${batchSizeRef.current}`);
+          // console.log(`[CLIENT] Continuing accumulation, new batch size: ${batchSizeRef.current}`);
         }
       }
 
@@ -360,16 +360,16 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
       ws.onmessage = async (event) => {
         try {
           const msg = JSON.parse(event.data);
-          console.log("[CLIENT] WebSocket message:", msg);
+          // console.log("[CLIENT] WebSocket message:", msg);
           
           // Handle AssemblyAI Turn messages - only process when formatted and turn ended
           if (msg.type === "Turn" && msg.turn_is_formatted === true && msg.end_of_turn === true) {
             const transcript = msg.transcript;
-            console.log("[TRANSCRIPT]", transcript);
+            // console.log("[TRANSCRIPT]", transcript);
             
             // Add to accumulator
             accumulatorRef.current.push(transcript);
-            console.log(`[CLIENT] Accumulator size: ${accumulatorRef.current.length}/${batchSizeRef.current}`);
+            // console.log(`[CLIENT] Accumulator size: ${accumulatorRef.current.length}/${batchSizeRef.current}`);
             
             // Check if we should process the batch
             if (accumulatorRef.current.length >= batchSizeRef.current && continueAccumulatingRef.current) {

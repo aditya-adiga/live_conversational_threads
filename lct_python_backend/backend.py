@@ -199,6 +199,25 @@ class RemoveUserRequest(BaseModel):
 class RemoveUserResponse(BaseModel):
     success: bool
     message: str
+
+class GenerateTokenRequest(BaseModel):
+    expires_in_seconds: int = 600
+
+class GenerateTokenResponse(BaseModel):
+    token: str
+
+class ProcessTranscriptRequest(BaseModel):
+    text_batch: List[str]
+    stop_accumulating_flag: bool = False
+    existing_json: List[Any] = []
+    chunk_dict: Dict[str, str] = {}
+
+class ProcessTranscriptResponse(BaseModel):
+    decision: str  # "continue_accumulating" or "stop_accumulating"
+    incomplete_segment: str
+    new_nodes: List[Any]
+    chunk_dict: Dict[str, str]
+    segmented_input_chunk: str
     
 # Function to chunk the text
 def sliding_window_chunking(text: str, chunk_size: int = 10000, overlap: int = 2000) -> Dict[str, str]:
@@ -1744,6 +1763,25 @@ def generate_formalism(chunks: dict, graph_data: dict, user_pref: str) -> List:
                 })
     return formalism_list
 
+# temporary token for assemblyai streaming api
+def generate_assemblyai_temp_token(expires_in_seconds):
+    url = f"https://streaming.assemblyai.com/v3/token?expires_in_seconds={expires_in_seconds}"
+    
+    try:
+        response = requests.get(
+            url,
+            headers={
+                "Authorization": ASSEMBLYAI_API_KEY
+            }
+        )
+        response.raise_for_status()  # Raise an error for bad status codes
+        return response.json()["token"]
+    except requests.exceptions.RequestException as error:
+        print(f"Error generating assemblyai temp token: {error}")
+        if hasattr(error, 'response') and error.response is not None:
+            print(error.response.json())
+        raise
+
 # all conversations
 @lct_app.get("/conversations/", response_model=List[SaveJsonResponseExtended])
 async def list_saved_conversations(current_user: dict = Depends(verify_firebase_token)):
@@ -2176,6 +2214,79 @@ async def generate_formalism_call(request: generateFormalismRequest, current_use
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+@lct_app.post("/process_transcript/", response_model=ProcessTranscriptResponse)
+async def process_transcript_batch(request: ProcessTranscriptRequest, current_user: dict = Depends(verify_firebase_token)):
+    """
+    Process a batch of transcript text and determine if accumulation should continue.
+    Returns the processed JSON structure, chunk dictionary, and decision flag.
+    """
+    try:
+        print(f"[INFO] Processing transcript batch of {len(request.text_batch)} items")
+        
+        # Join the text batch into a single string
+        input_text = ' '.join(request.text_batch)
+        
+        # Process with genai_accumulate_text_json
+        accumulated_output = genai_accumulate_text_json(input_text)
+        
+        if not accumulated_output:
+            print("[INFO]: Failed to accumulate; defaulting to continue accumulating.")
+            return ProcessTranscriptResponse(
+                decision="continue_accumulating",
+                incomplete_segment=input_text,
+                existing_json=request.existing_json,
+                chunk_dict=request.chunk_dict,
+                segmented_input_chunk="",
+            )
+        
+        # Extract segments and decision
+        if not request.stop_accumulating_flag:
+            segmented_input_chunk = accumulated_output.get('Completed_segment', '')
+            incomplete_seg = accumulated_output.get('Incomplete_segment', '')
+            decision_flag = accumulated_output.get("decision", "continue_accumulating")
+        else:
+            # Force stop accumulating
+            decision_flag = "stop_accumulating"
+            segmented_input_chunk = input_text
+            incomplete_seg = ''
+        
+        print(f"[INFO]: segmented input: {segmented_input_chunk}")
+        print(f"[INFO]: decision: {decision_flag}")
+        
+        # Process the segmented chunk if it exists
+        existing_json = request.existing_json
+        chunk_dict = request.chunk_dict
+        new_nodes = []
+
+        if segmented_input_chunk.strip():
+            mod_input = f'Existing JSON : \n {json.dumps(existing_json)} \n\n Transcript Input: \n {segmented_input_chunk}'
+            output_json = generate_lct_json_gemini(mod_input)
+            
+            if output_json:
+                chunk_id = str(uuid.uuid4())
+                chunk_dict[chunk_id] = segmented_input_chunk
+                
+                for item in output_json:
+                    item["chunk_id"] = chunk_id
+                
+                new_nodes = output_json
+        
+        return ProcessTranscriptResponse(
+            decision=decision_flag,
+            incomplete_segment=incomplete_seg,
+            new_nodes=new_nodes, # Return only the new nodes (delta)
+            chunk_dict=chunk_dict,
+            segmented_input_chunk=segmented_input_chunk,
+        )
+        
+    except HTTPException as http_err:
+        raise http_err
+    except Exception as e:
+        print(f"[ERROR] Failed to process transcript: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Transcript processing failed: {str(e)}")
     
 @lct_app.websocket("/ws/audio")
 async def websocket_audio_endpoint(client_websocket: WebSocket):
@@ -2437,6 +2548,22 @@ async def fact_check_claims_call(request: FactCheckRequest):
         raise http_err
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
+
+@lct_app.post("/generate_assemblyai_token/", response_model=GenerateTokenResponse)
+async def generate_token_call(request: GenerateTokenRequest, current_user: dict = Depends(verify_firebase_token)):
+    try:
+        if request.expires_in_seconds <= 0:
+            raise HTTPException(status_code=400, detail="expires_in_seconds must be greater than 0.")
+        
+        token = generate_assemblyai_temp_token(request.expires_in_seconds)
+        
+        return GenerateTokenResponse(token=token)
+    
+    except HTTPException as http_err:
+        raise http_err
+    except Exception as e:
+        print(f"[ERROR] Failed to generate AssemblyAI token: {e}")
+        raise HTTPException(status_code=500, detail=f"Token generation failed: {str(e)}")
 
 # Serve index.html at root
 @lct_app.get("/")

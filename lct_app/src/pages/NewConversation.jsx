@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 // import Input from "./components/Input";
-import AudioInput from "../components/AudioInput";
+import AudioInput from "../components/AudioInputFrontend";
 import StructuralGraph from "../components/StructuralGraph";
 import ContextualGraph from "../components/ContextualGraph";
 import SaveJson from "../components/SaveJson";

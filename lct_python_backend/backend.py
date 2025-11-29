@@ -106,6 +106,49 @@ VITE_API_URL = os.getenv("VITE_API_URL")
 
 PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
 
+import re
+
+def extract_json_from_response(text):
+    """
+    Extract JSON from a response that may contain markdown code blocks or extra text.
+    """
+    # Remove markdown code blocks if present
+    text = re.sub(r'```json\s*', '', text)
+    text = re.sub(r'```\s*', '', text)
+    text = text.strip()
+    
+    # Try to find the first JSON object/array
+    # Look for first { or [
+    start_idx = -1
+    for i, char in enumerate(text):
+        if char in ['{', '[']:
+            start_idx = i
+            break
+    
+    if start_idx == -1:
+        return text  # No JSON found, return as-is
+    
+    # Find matching closing bracket
+    bracket_stack = []
+    bracket_map = {'{': '}', '[': ']'}
+    end_idx = -1
+    
+    for i in range(start_idx, len(text)):
+        char = text[i]
+        if char in ['{', '[']:
+            bracket_stack.append(bracket_map[char])
+        elif char in ['}', ']']:
+            if bracket_stack and bracket_stack[-1] == char:
+                bracket_stack.pop()
+                if not bracket_stack:
+                    end_idx = i
+                    break
+    
+    if end_idx != -1:
+        return text[start_idx:end_idx + 1]
+    
+    return text  # Fallback: return original
+
 # Pydantic Models
 class TranscriptRequest(BaseModel):
     transcript: str
@@ -963,7 +1006,9 @@ Jordan: Sounds good. I’ll document the ChatGPT, AWS, and Stripe updates in our
                     full_response += chunk.text
 
             try:
-                parsed = json.loads(full_response)
+                # Extract just the JSON portion from the response
+                json_text = extract_json_from_response(full_response)
+                parsed = json.loads(json_text)
                 return parsed
 
             except json.JSONDecodeError as e:
@@ -1097,7 +1142,9 @@ Evaluation Notes:
 
             # Try to decode
             try:
-                return json.loads(full_response)
+                # Extract just the JSON portion from the response
+                json_text = extract_json_from_response(full_response)
+                return json.loads(json_text)
             except json.JSONDecodeError as e:
                 print(f"[INFO]: [Attempt {attempt+1}] JSON decoding failed: {e}")
                 print(f"[INFO]: [Raw Gemini output]:\n{full_response}")
@@ -2161,7 +2208,7 @@ async def save_json_call(request: SaveJsonRequest, current_user: dict = Depends(
         # await insert_conversation_metadata(metadata)
         insert_conversation_metadata_test(metadata)
 
-        print(f"[INFO] Conversation saved for user {current_user['uid']}: {result['file_id']}")
+        # print(f"[INFO] Conversation saved for user {current_user['uid']}: {result['file_id']}")
         return result
 
     except HTTPException as http_err:
@@ -2251,8 +2298,8 @@ async def process_transcript_batch(request: ProcessTranscriptRequest, current_us
             segmented_input_chunk = input_text
             incomplete_seg = ''
         
-        print(f"[INFO]: segmented input: {segmented_input_chunk}")
-        print(f"[INFO]: decision: {decision_flag}")
+        # print(f"[INFO]: segmented input: {segmented_input_chunk}")
+        # print(f"[INFO]: decision: {decision_flag}")
         
         # Process the segmented chunk if it exists
         existing_json = request.existing_json

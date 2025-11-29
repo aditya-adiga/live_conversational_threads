@@ -48,6 +48,7 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
   // Refs to track latest props for WebSocket callbacks
   const latestGraphData = useRef(graphData);
   const latestChunkDict = useRef(chunkDict);
+  const latestConversationId = useRef(conversationId);
 
   // Locking ref to prevent race conditions
   const isProcessingRef = useRef(false);
@@ -59,6 +60,10 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
   useEffect(() => {
     latestChunkDict.current = chunkDict;
   }, [chunkDict]);
+
+  useEffect(() => {
+    latestConversationId.current = conversationId;
+  }, [conversationId]);
 
   // Transcript accumulation and batching state
   const accumulatorRef = useRef([]);

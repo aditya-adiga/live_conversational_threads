@@ -302,6 +302,11 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
     // clear the previous graph and chunk
     onDataReceived?.([]);
     onChunksReceived?.({}); 
+    
+    // Force clear refs immediately to prevent race conditions
+    latestGraphData.current = [];
+    latestChunkDict.current = {};
+    
     //reset filename
     setFileName?.("");
     fileNameWasReset.current = true;

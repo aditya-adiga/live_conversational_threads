@@ -52,6 +52,8 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
 
   // Locking ref to prevent race conditions
   const isProcessingRef = useRef(false);
+  // Ref to track consecutive errors for exponential backoff
+  const errorCountRef = useRef(0);
 
   useEffect(() => {
     latestGraphData.current = graphData;
@@ -101,7 +103,10 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
       // LOCK
       isProcessingRef.current = true;
 
-      // console.log(`[CLIENT] Processing batch of ${accumulatorRef.current.length} transcripts, stopFlag: ${stopAccumulatingFlag}`);
+      const shouldForceStop = (accumulatorRef.current.length >= MAX_BATCH_SIZE);
+      const finalStopFlag = stopAccumulatingFlag || shouldForceStop;
+
+      // console.log(`[CLIENT] Processing batch of ${accumulatorRef.current.length} transcripts, stopFlag: ${finalStopFlag}`);
       
       const currentGraphData = latestGraphData.current;
       const currentChunkDict = latestChunkDict.current;
@@ -110,7 +115,7 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
         method: "POST",
         body: JSON.stringify({
           text_batch: accumulatorRef.current,
-          stop_accumulating_flag: stopAccumulatingFlag,
+          stop_accumulating_flag: finalStopFlag,
           existing_json: (currentGraphData && currentGraphData.length > 0) ? currentGraphData[0] : [],
           chunk_dict: currentChunkDict || {}
         }),
@@ -146,17 +151,22 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
         // console.log("[CLIENT] Batch processed - resetting accumulator");
       } else if (result.decision === "continue_accumulating") {
         // Check if we've hit max batch size
-        if (batchSizeRef.current >= MAX_BATCH_SIZE) {
-          // console.log("[CLIENT] Max batch size reached, forcing segmentation");
-          // Increase batch size and keep accumulating
-          batchSizeRef.current += BATCH_SIZE;
+        const currentLength = accumulatorRef.current.length;
+        if (batchSizeRef.current <= currentLength) {
+          // Dynamic sizing: if accumulator is huge (e.g. 38), we must set target > 38 (e.g. 42)
+          // to avoid infinite loop in finally block.
+          batchSizeRef.current = currentLength + BATCH_SIZE;
           // console.log(`[CLIENT] Continuing accumulation, new batch size: ${batchSizeRef.current}`);
         }
       }
 
+      errorCountRef.current = 0;
+
     } catch (error) {
       console.error("[CLIENT] Error processing transcript batch:", error);
       setMessage?.(`Error processing transcript: ${error.message}`);
+
+      errorCountRef.current += 1;
     } finally {
       // 6. UNLOCK
       isProcessingRef.current = false;
@@ -168,12 +178,20 @@ export default function AudioInput({ onDataReceived, onChunksReceived, chunkDict
         stopAccumulatingFlag; 
         
       if (shouldRetrigger) {
+         const delay = errorCountRef.current > 0 
+            ? Math.min(2000 * Math.pow(2, errorCountRef.current - 1), 30000) // Cap at 30s
+            : 50;
+            
+         if (errorCountRef.current > 0) {
+            console.log(`[CLIENT] Retrying in ${delay}ms (Error count: ${errorCountRef.current})`);
+         }
+
          setTimeout(() => {
             if (!isProcessingRef.current && accumulatorRef.current.length > 0) {
                const forceStop = (batchSizeRef.current >= MAX_BATCH_SIZE);
                processTranscriptBatch(stopAccumulatingFlag || forceStop); 
             }
-         }, 50); 
+         }, delay); 
       }
     }
   };

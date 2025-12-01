@@ -3,6 +3,7 @@ import os
 import json
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from fastapi.staticfiles import StaticFiles
+from fastapi.concurrency import run_in_threadpool
 from websockets.exceptions import ConnectionClosedError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
@@ -2275,7 +2276,7 @@ async def process_transcript_batch(request: ProcessTranscriptRequest, current_us
         input_text = ' '.join(request.text_batch)
         
         # Process with genai_accumulate_text_json
-        accumulated_output = genai_accumulate_text_json(input_text)
+        accumulated_output = await run_in_threadpool(genai_accumulate_text_json, input_text)
         
         if not accumulated_output:
             print("[INFO]: Failed to accumulate; defaulting to continue accumulating.")
@@ -2299,7 +2300,7 @@ async def process_transcript_batch(request: ProcessTranscriptRequest, current_us
             incomplete_seg = ''
         
         # print(f"[INFO]: segmented input: {segmented_input_chunk}")
-        # print(f"[INFO]: decision: {decision_flag}")
+        # print(f"[INFO]: accumulated output: {accumulated_output}")
         
         # Process the segmented chunk if it exists
         existing_json = request.existing_json
@@ -2308,9 +2309,10 @@ async def process_transcript_batch(request: ProcessTranscriptRequest, current_us
 
         if segmented_input_chunk.strip():
             mod_input = f'Existing JSON : \n {json.dumps(existing_json)} \n\n Transcript Input: \n {segmented_input_chunk}'
-            output_json = generate_lct_json_gemini(mod_input)
+            output_json = await run_in_threadpool(generate_lct_json_gemini, mod_input)
             
             if output_json:
+                # print(f"[INFO]: output json: {output_json}")
                 chunk_id = str(uuid.uuid4())
                 chunk_dict[chunk_id] = segmented_input_chunk
                 
@@ -2348,7 +2350,7 @@ async def websocket_audio_endpoint(client_websocket: WebSocket):
         # Replace with your actual decision logic or API call
         input_text = ' '.join(text_batch)
         # contextually complete chunk
-        accumulated_output = genai_accumulate_text_json(input_text)
+        accumulated_output = await run_in_threadpool(genai_accumulate_text_json, input_text)
         if not accumulated_output:
             print("[INFO]: Failed to accumulate; defaulting to continue accumulating.")
             return True, ' '.join(text_batch)  # return as if still incomplete
@@ -2379,7 +2381,7 @@ async def websocket_audio_endpoint(client_websocket: WebSocket):
         #sending graph stuff to front end
         if segmented_input_chunk.strip():
             mod_input = f'Existing JSON : \n {repr(shared_state["existing_json"])} \n\n Transcript Input: \n {segmented_input_chunk}'
-            output_json = generate_lct_json_gemini(mod_input)
+            output_json = await run_in_threadpool(generate_lct_json_gemini, mod_input)
             # output_json = generate_lct_json_claude(mod_input)
 
             if output_json:

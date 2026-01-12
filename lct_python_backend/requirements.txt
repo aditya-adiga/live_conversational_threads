@@ -10,3 +10,4 @@ databases[postgresql]==0.9.0
 langchain-openai==0.3.30
 langchain==0.3.26
 firebase-admin==6.2.0
+sse-starlette==3.0.3

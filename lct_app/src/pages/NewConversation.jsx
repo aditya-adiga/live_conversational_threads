@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 // import Input from "./components/Input";
 import AudioInput from "../components/AudioInputFrontend";
+import GoogleMeetInput from "../components/GoogleMeetInput";
 import StructuralGraph from "../components/StructuralGraph";
 import ContextualGraph from "../components/ContextualGraph";
 import SaveJson from "../components/SaveJson";
@@ -25,6 +26,7 @@ export default function NewConversation() {
   const [message, setMessage] = useState(""); // message for saving conversation
   const [fileName, setFileName] = useState(""); //filename for saving conversation
   const [isFullScreen, setIsFullScreen] = useState(false); // full screen status
+  const [inputMode, setInputMode] = useState("mic"); // "mic" or "meet"
   
   const [conversationId, setConversationId] = useState(() => {
     return crypto.randomUUID(); // uuid for conversation
@@ -183,19 +185,52 @@ export default function NewConversation() {
       )}
       
       {/* Audio Input Section - Always visible */}
-      <div className="sticky bottom-0 w-full p-4 flex justify-center z-20">
-        <AudioInput
-          onDataReceived={handleDataReceived}
-          onChunksReceived={handleChunksReceived}
-          chunkDict={chunkDict}
-          graphData={graphData}
-          conversationId={conversationId}
-          setConversationId={setConversationId}
-          setMessage={setMessage}
-          message={message}
-          fileName={fileName}
-          setFileName={setFileName}
-        />
+      <div className="sticky bottom-0 w-full p-4 flex flex-col items-center z-20 pointer-events-none">
+        <div className="pointer-events-auto flex flex-col items-center gap-2 w-full max-w-xl bg-white/90 backdrop-blur-sm rounded-xl shadow-lg p-2 border border-white/20">
+            
+            {/* Input Mode Toggle */}
+            <div className="flex bg-gray-100 rounded-full p-1 shadow-inner">
+                 <button 
+                     onClick={() => setInputMode("mic")}
+                     className={`px-4 py-1 rounded-full text-sm font-medium transition-all ${inputMode === "mic" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                 >
+                     Microphone
+                 </button>
+                 <button 
+                     onClick={() => setInputMode("meet")}
+                     className={`px-4 py-1 rounded-full text-sm font-medium transition-all ${inputMode === "meet" ? "bg-white text-blue-600 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                 >
+                     Google Meet
+                 </button>
+            </div>
+
+            {inputMode === "mic" ? (
+                <AudioInput
+                  onDataReceived={handleDataReceived}
+                  onChunksReceived={handleChunksReceived}
+                  chunkDict={chunkDict}
+                  graphData={graphData}
+                  conversationId={conversationId}
+                  setConversationId={setConversationId}
+                  setMessage={setMessage}
+                  message={message}
+                  fileName={fileName}
+                  setFileName={setFileName}
+                />
+            ) : (
+                <GoogleMeetInput
+                  onDataReceived={handleDataReceived}
+                  onChunksReceived={handleChunksReceived}
+                  setConversationId={setConversationId}
+                  conversationId={conversationId}
+                  setMessage={setMessage}
+                  graphData={graphData}
+                  chunkDict={chunkDict}
+                  fileName={fileName}
+                  setFileName={setFileName}
+                />
+            )}
+        </div>
       </div>
 
           {/* Save Transcript Button Below Audio Input */}

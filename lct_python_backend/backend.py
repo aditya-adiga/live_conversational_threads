@@ -15,6 +15,9 @@ import random
 import requests
 import asyncio
 import websockets
+import httpx
+from sse_starlette.sse import EventSourceResponse
+from fastapi import Request
 from google import genai
 from google.genai import types
 from pathlib import Path
@@ -38,8 +41,7 @@ from contextlib import asynccontextmanager
 
 # GLOBAL VARIABLES
 BATCH_SIZE = 4
-MAX_BATCH_SIZE = 12
-
+MAX_BATCH_SIZE = 20
 
 # Directory to save JSON files
 # SAVE_DIRECTORY = "../saved_json"
@@ -106,6 +108,32 @@ VITE_API_URL = os.getenv("VITE_API_URL")
 
 
 PERPLEXITY_API_URL = "https://api.perplexity.ai/chat/completions"
+
+RECALL_API_KEY = os.getenv("RECALL_API_KEY")
+
+class SessionManager:
+    def __init__(self):
+        self.sessions: Dict[str, Dict[str, Any]] = {}
+
+    def create_session(self, bot_id: str):
+        self.sessions[bot_id] = {
+            "accumulator": [],
+            "existing_json": [],
+            "chunk_dict": {},
+            "queue": asyncio.Queue(),  # For SSE updates
+            "batch_size": BATCH_SIZE,
+            "continue_accumulating": True,
+            "error_count": 0
+        }
+
+    def get_session(self, bot_id: str):
+        return self.sessions.get(bot_id)
+
+    def delete_session(self, bot_id: str):
+        if bot_id in self.sessions:
+            del self.sessions[bot_id]
+
+session_manager = SessionManager()
 
 import re
 
@@ -262,7 +290,12 @@ class ProcessTranscriptResponse(BaseModel):
     new_nodes: List[Any]
     chunk_dict: Dict[str, str]
     segmented_input_chunk: str
+
+class StartBotRequest(BaseModel):
+    meeting_url: str
     
+class StopBotRequest(BaseModel):
+    bot_id: str
 # Function to chunk the text
 def sliding_window_chunking(text: str, chunk_size: int = 10000, overlap: int = 2000) -> Dict[str, str]:
     assert chunk_size > overlap, "chunk_size must be greater than overlap!"
@@ -2263,6 +2296,60 @@ async def generate_formalism_call(request: generateFormalismRequest, current_use
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An unexpected error occurred: {str(e)}")
 
+async def process_transcript_segment(input_text: str, existing_json: List[Any], chunk_dict: Dict[str, str], stop_accumulating_flag: bool = False):
+    try:
+        # Process with genai_accumulate_text_json
+        accumulated_output = await run_in_threadpool(genai_accumulate_text_json, input_text)
+        
+        if not accumulated_output:
+            print("[INFO]: Failed to accumulate; defaulting to continue accumulating.")
+            return {
+                "decision": "continue_accumulating",
+                "incomplete_segment": input_text,
+                "new_nodes": [],
+                "chunk_dict": chunk_dict,
+                "segmented_input_chunk": ""
+            }
+        
+        # Extract segments and decision
+        if not stop_accumulating_flag:
+            segmented_input_chunk = accumulated_output.get('Completed_segment', '')
+            incomplete_seg = accumulated_output.get('Incomplete_segment', '')
+            decision_flag = accumulated_output.get("decision", "continue_accumulating")
+        else:
+            # Force stop accumulating
+            decision_flag = "stop_accumulating"
+            segmented_input_chunk = input_text
+            incomplete_seg = ''
+        
+        new_nodes = []
+
+        if segmented_input_chunk.strip():
+            mod_input = f'Existing JSON : \n {json.dumps(existing_json)} \n\n Transcript Input: \n {segmented_input_chunk}'
+            output_json = await run_in_threadpool(generate_lct_json_gemini, mod_input)
+            
+            if output_json:
+                chunk_id = str(uuid.uuid4())
+                chunk_dict[chunk_id] = segmented_input_chunk
+                
+                for item in output_json:
+                    item["chunk_id"] = chunk_id
+                
+                new_nodes = output_json
+        
+        return {
+            "decision": decision_flag,
+            "incomplete_segment": incomplete_seg,
+            "new_nodes": new_nodes,
+            "chunk_dict": chunk_dict,
+            "segmented_input_chunk": segmented_input_chunk
+        }
+    except Exception as e:
+        print(f"[ERROR] Error in process_transcript_segment: {e}")
+        import traceback
+        traceback.print_exc()
+        raise e
+
 @lct_app.post("/process_transcript/", response_model=ProcessTranscriptResponse)
 async def process_transcript_batch(request: ProcessTranscriptRequest, current_user: dict = Depends(verify_firebase_token)):
     """
@@ -2275,66 +2362,25 @@ async def process_transcript_batch(request: ProcessTranscriptRequest, current_us
         # Join the text batch into a single string
         input_text = ' '.join(request.text_batch)
         
-        # Process with genai_accumulate_text_json
-        accumulated_output = await run_in_threadpool(genai_accumulate_text_json, input_text)
-        
-        if not accumulated_output:
-            print("[INFO]: Failed to accumulate; defaulting to continue accumulating.")
-            return ProcessTranscriptResponse(
-                decision="continue_accumulating",
-                incomplete_segment=input_text,
-                existing_json=request.existing_json,
-                chunk_dict=request.chunk_dict,
-                segmented_input_chunk="",
-            )
-        
-        # Extract segments and decision
-        if not request.stop_accumulating_flag:
-            segmented_input_chunk = accumulated_output.get('Completed_segment', '')
-            incomplete_seg = accumulated_output.get('Incomplete_segment', '')
-            decision_flag = accumulated_output.get("decision", "continue_accumulating")
-        else:
-            # Force stop accumulating
-            decision_flag = "stop_accumulating"
-            segmented_input_chunk = input_text
-            incomplete_seg = ''
-        
-        # print(f"[INFO]: segmented input: {segmented_input_chunk}")
-        # print(f"[INFO]: accumulated output: {accumulated_output}")
-        
-        # Process the segmented chunk if it exists
-        existing_json = request.existing_json
-        chunk_dict = request.chunk_dict
-        new_nodes = []
-
-        if segmented_input_chunk.strip():
-            mod_input = f'Existing JSON : \n {json.dumps(existing_json)} \n\n Transcript Input: \n {segmented_input_chunk}'
-            output_json = await run_in_threadpool(generate_lct_json_gemini, mod_input)
-            
-            if output_json:
-                # print(f"[INFO]: output json: {output_json}")
-                chunk_id = str(uuid.uuid4())
-                chunk_dict[chunk_id] = segmented_input_chunk
-                
-                for item in output_json:
-                    item["chunk_id"] = chunk_id
-                
-                new_nodes = output_json
+        result = await process_transcript_segment(
+            input_text=input_text,
+            existing_json=request.existing_json,
+            chunk_dict=request.chunk_dict,
+            stop_accumulating_flag=request.stop_accumulating_flag
+        )
         
         return ProcessTranscriptResponse(
-            decision=decision_flag,
-            incomplete_segment=incomplete_seg,
-            new_nodes=new_nodes, # Return only the new nodes (delta)
-            chunk_dict=chunk_dict,
-            segmented_input_chunk=segmented_input_chunk,
+            decision=result["decision"],
+            incomplete_segment=result["incomplete_segment"],
+            new_nodes=result["new_nodes"],
+            chunk_dict=result["chunk_dict"],
+            segmented_input_chunk=result["segmented_input_chunk"],
         )
         
     except HTTPException as http_err:
         raise http_err
     except Exception as e:
         print(f"[ERROR] Failed to process transcript: {e}")
-        import traceback
-        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Transcript processing failed: {str(e)}")
     
 @lct_app.websocket("/ws/audio")
@@ -2613,6 +2659,241 @@ async def generate_token_call(request: GenerateTokenRequest, current_user: dict 
     except Exception as e:
         print(f"[ERROR] Failed to generate AssemblyAI token: {e}")
         raise HTTPException(status_code=500, detail=f"Token generation failed: {str(e)}")
+
+# Start bot for recall.ai
+
+@lct_app.post("/recall/start_bot")
+async def start_recall_bot(request: StartBotRequest):
+    if not RECALL_API_KEY:
+        raise HTTPException(status_code=500, detail="RECALL_API_KEY not configured")
+    
+    # Create Bot
+    base_url = os.getenv('VITE_API_URL')
+    
+    # Handle localhost dev environment (requires ngrok/tunnel)
+    if "localhost" in base_url or "127.0.0.1" in base_url:
+        ngrok_url = "https://7dbf325c2d88.ngrok-free.app"
+        if ngrok_url:
+            print(f"[INFO] Localhost detected, using NGROK_URL: {ngrok_url}")
+            base_url = ngrok_url
+        else:
+             print("[WARNING] Base URL is localhost and NGROK_URL is not set. Recall.ai webhooks will fail unless you have a tunnel.")
+
+    if not base_url.startswith("http"):
+        base_url = f"https://{base_url}"
+        
+    webhook_url = f"{base_url}/recall/webhook"
+    
+    print(f"[INFO] Starting bot for {request.meeting_url} with webhook {webhook_url}")
+
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                "https://us-west-2.recall.ai/api/v1/bot/",
+                headers={
+                    "Authorization": f"Token {RECALL_API_KEY}",
+                    "accept": "application/json",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "meeting_url": request.meeting_url,
+                    "bot_name": "LCT Bot",
+                    "recording_config": {
+                        "transcript": {
+                            "provider": {
+                                "recallai_streaming": {
+                                    "mode": "prioritize_low_latency",
+                                    "language_code": "en",
+                                    }
+                            }
+                        },
+                        "realtime_endpoints": [
+                            {
+                                "type": "webhook",
+                                "url": webhook_url,
+                                "events": ["transcript.data"]
+                            }
+                        ]
+                    }
+                },
+                timeout=30.0
+            )
+            
+            if response.status_code != 201:
+                print(f"[ERROR] Recall API error: {response.text}")
+                raise HTTPException(status_code=response.status_code, detail=f"Failed to create bot: {response.text}")
+                
+            bot_data = response.json()
+            bot_id = bot_data["id"]
+            
+            session_manager.create_session(bot_id)
+            return {"bot_id": bot_id}
+        except httpx.RequestError as e:
+             print(f"[ERROR] Recall API connection error: {e}")
+             raise HTTPException(status_code=500, detail=f"Recall API connection error: {str(e)}")
+
+async def process_recall_transcript(bot_id: str):
+    """
+    Background task to process transcripts for a given session.
+    Checks if batch size is reached and runs the heavy processing logic.
+    """
+    try:
+        session = session_manager.get_session(bot_id)
+        if not session:
+            return
+
+        should_force_stop = len(session["accumulator"]) >= MAX_BATCH_SIZE
+        if len(session["accumulator"]) >= session["batch_size"] or should_force_stop:
+            input_text = " ".join(session["accumulator"])
+            
+            # print(f"[INFO] Processing Recall batch for bot {bot_id}, size: {len(session['accumulator'])}, force: {should_force_stop}")
+            
+            result = await process_transcript_segment(
+                input_text=input_text,
+                existing_json=session["existing_json"],
+                chunk_dict=session["chunk_dict"],
+                stop_accumulating_flag=should_force_stop
+            )
+            
+            # Update state
+            if result["decision"] == "stop_accumulating":
+                session["accumulator"] = [result["incomplete_segment"]] if result["incomplete_segment"] else []
+                session["batch_size"] = BATCH_SIZE # Reset default
+            else:
+                # Continue accumulating logic
+                    if session["batch_size"] <= len(session["accumulator"]):
+                        session["batch_size"] += BATCH_SIZE
+
+            session["chunk_dict"] = result["chunk_dict"]
+            
+            # Handle new nodes
+            if result["new_nodes"]:
+                session["existing_json"].extend(result["new_nodes"])
+                
+                # Push to SSE
+                # print(f"[INFO] Pushing {len(result['new_nodes'])} new nodes to SSE for bot {bot_id}")
+                await session["queue"].put({
+                    "type": "graph_update",
+                    "data": session["existing_json"],
+                    "chunks": session["chunk_dict"]
+                })
+    except Exception as e:
+        print(f"[ERROR] Background processing error for bot {bot_id}: {e}")
+        import traceback
+        traceback.print_exc()
+
+@lct_app.post("/recall/webhook")
+async def recall_webhook(request: Request):
+    try:
+        payload = await request.json()
+        event = payload.get("event")
+        
+        if event == "transcript.data":
+            data = payload.get("data", {})
+            bot_data = data.get("bot", {})
+            bot_id = bot_data.get("id")
+            
+            # build text
+            words_data = data.get("data", {}).get("words", [])
+            text = " ".join([w.get("text") for w in words_data])
+            
+            session = session_manager.get_session(bot_id)
+            if session and text:
+                # print(f"[INFO] Received text for bot {bot_id}: {text[:50]}...")
+                session["accumulator"].append(text)
+
+                asyncio.create_task(process_recall_transcript(bot_id)) #helps handle multiple concurrent requests
+                        
+        return {"status": "ok"}
+    except Exception as e:
+        print(f"[ERROR] Webhook error: {e}")
+        return {"status": "error", "detail": str(e)}
+
+@lct_app.post("/recall/stop_bot")
+async def stop_recall_bot(request: StopBotRequest):
+    if not RECALL_API_KEY:
+        raise HTTPException(status_code=500, detail="RECALL_API_KEY not configured")
+        
+    bot_id = request.bot_id
+    session = session_manager.get_session(bot_id)
+    
+    if not session:
+        print(f"[WARN] Stop requested for unknown session {bot_id}")
+    else:
+        # Final Flush
+        if session["accumulator"]:
+            print(f"[INFO] Final flush for bot {bot_id}")
+            try:
+                input_text = " ".join(session["accumulator"])
+                result = await process_transcript_segment(
+                    input_text=input_text,
+                    existing_json=session["existing_json"],
+                    chunk_dict=session["chunk_dict"],
+                    stop_accumulating_flag=True
+                )
+                
+                if result["new_nodes"]:
+                    session["existing_json"].extend(result["new_nodes"])
+                    session["chunk_dict"] = result["chunk_dict"]
+                    
+                    # Push final update
+                    await session["queue"].put({
+                        "type": "graph_update",
+                        "data": session["existing_json"],
+                        "chunks": session["chunk_dict"]
+                    })
+            except Exception as e:
+                print(f"[ERROR] Final flush failed: {e}")
+
+    # Call Recall API to leave call
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                f"https://us-west-2.recall.ai/api/v1/bot/{bot_id}/leave_call/",
+                headers={
+                    "Authorization": f"Token {RECALL_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                timeout=10.0
+            )
+            if response.status_code not in [200, 201]:
+                print(f"[ERROR] Recall Leave Call API error: {response.text}")
+        except Exception as e:
+             print(f"[ERROR] Recall Leave Call connection error: {e}")
+    
+    return {"status": "bot_stopped"}
+
+@lct_app.get("/recall/events/{bot_id}")
+async def recall_events(bot_id: str, request: Request):
+    session = session_manager.get_session(bot_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Bot session not found")
+        
+    async def event_generator():
+        print(f"[INFO] SSE Connected for bot {bot_id}")
+        while True:
+            if await request.is_disconnected():
+                print(f"[INFO] SSE Disconnected for bot {bot_id}")
+                break
+                
+            try:
+                # Wait for data
+                data = await session["queue"].get()
+                # print(f"[INFO] SSE Data: {data}")
+                yield {
+                    "event": "message",
+                    "data": json.dumps(data)
+                }
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                print(f"[ERROR] SSE Error: {e}")
+                yield {
+                    "event": "error",
+                    "data": str(e)
+                }
+
+    return EventSourceResponse(event_generator())
 
 # Serve index.html at root
 @lct_app.get("/")
